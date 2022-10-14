@@ -43,6 +43,7 @@ import com.cloudwebrtc.webrtc.record.OutputAudioSamplesInterceptor;
 import com.cloudwebrtc.webrtc.utils.Callback;
 import com.cloudwebrtc.webrtc.utils.ConstraintsArray;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
+import com.cloudwebrtc.webrtc.utils.CustomVideoCapturer;
 import com.cloudwebrtc.webrtc.utils.EglUtils;
 import com.cloudwebrtc.webrtc.utils.MediaConstraintsUtils;
 import com.cloudwebrtc.webrtc.utils.ObjectType;
@@ -638,6 +639,8 @@ class GetUserMediaImpl {
         return null;
     }
 
+    private ArView arView;
+
     private VideoTrack getUserVideo(ConstraintsMap constraints) {
         ConstraintsMap videoConstraintsMap = null;
         ConstraintsMap videoConstraintsMandatory = null;
@@ -672,7 +675,14 @@ class GetUserMediaImpl {
         isFacing = facingMode == null || !facingMode.equals("environment");
         String sourceId = getSourceIdConstraint(videoConstraintsMap);
 
-        VideoCapturer videoCapturer = createVideoCapturer(cameraEnumerator, isFacing, sourceId);
+        if (arView == null) {
+            arView = new ArView();
+        }
+
+        VideoCapturer videoCapturer = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            videoCapturer = new CustomVideoCapturer(arView.surfaceView(),20);
+        }
 
         if (videoCapturer == null) {
             return null;
