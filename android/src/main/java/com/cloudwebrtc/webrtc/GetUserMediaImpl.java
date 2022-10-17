@@ -68,6 +68,8 @@ import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
+import io.github.sceneview.*;
+
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -76,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.flutter.plugin.common.MethodChannel.Result;
+import io.github.sceneview.ar.ArSceneView;
 
 /**
  * The implementation of {@code getUserMedia} extracted into a separate file in order to reduce
@@ -639,7 +642,7 @@ class GetUserMediaImpl {
         return null;
     }
 
-    private ArView arView;
+    private ArSceneView view;
 
     private VideoTrack getUserVideo(ConstraintsMap constraints) {
         ConstraintsMap videoConstraintsMap = null;
@@ -675,13 +678,13 @@ class GetUserMediaImpl {
         isFacing = facingMode == null || !facingMode.equals("environment");
         String sourceId = getSourceIdConstraint(videoConstraintsMap);
 
-        if (arView == null) {
-            arView = new ArView();
+        if (view == null) {
+            ArSceneView view = new ArSceneView(applicationContext);
         }
 
         VideoCapturer videoCapturer = null;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            videoCapturer = new CustomVideoCapturer(arView.surfaceView(),20);
+            videoCapturer = new CustomVideoCapturer(view.getArSession().getLifecycle().getSceneView(), 20);
         }
 
         if (videoCapturer == null) {
@@ -689,7 +692,7 @@ class GetUserMediaImpl {
         }
 
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
-        VideoSource videoSource = pcFactory.createVideoSource(false);
+        VideoSource videoSource = pcFactory.createVideoSource(true);
         String threadName = Thread.currentThread().getName();
         SurfaceTextureHelper surfaceTextureHelper =
                 SurfaceTextureHelper.create(threadName, EglUtils.getRootEglBaseContext());
