@@ -78,7 +78,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.github.sceneview.ar.ArSceneView;
+import io.github.sceneview.SceneView;
 
 /**
  * The implementation of {@code getUserMedia} extracted into a separate file in order to reduce
@@ -642,7 +642,7 @@ class GetUserMediaImpl {
         return null;
     }
 
-    private ArSceneView view;
+    private SceneView view;
 
     private VideoTrack getUserVideo(ConstraintsMap constraints) {
         ConstraintsMap videoConstraintsMap = null;
@@ -679,12 +679,12 @@ class GetUserMediaImpl {
         String sourceId = getSourceIdConstraint(videoConstraintsMap);
 
         if (view == null) {
-            ArSceneView view = new ArSceneView(applicationContext);
+            view = new SceneView(applicationContext);
         }
 
         VideoCapturer videoCapturer = null;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            videoCapturer = new CustomVideoCapturer(view.getArSession().getLifecycle().getSceneView(), 20);
+            videoCapturer = new CustomVideoCapturer(view, 20);
         }
 
         if (videoCapturer == null) {

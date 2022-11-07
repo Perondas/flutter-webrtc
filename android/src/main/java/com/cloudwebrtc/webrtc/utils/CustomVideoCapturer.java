@@ -32,13 +32,15 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.github.sceneview.SceneView;
+
 @RequiresApi(api = Build.VERSION_CODES.N)
 public class CustomVideoCapturer implements VideoCapturer, VideoSink {
 
     private static int VIEW_CAPTURER_FRAMERATE_MS = 10;
     private int width;
     private int height;
-    private SurfaceView view;
+    private SceneView view;
     private Context context;
     private CapturerObserver capturerObserver;
     private SurfaceTextureHelper surfaceTextureHelper;
@@ -87,7 +89,7 @@ public class CustomVideoCapturer implements VideoCapturer, VideoSink {
     };
     private Thread captureThread;
 
-    public CustomVideoCapturer(SurfaceView view, int framePerSecond) {
+    public CustomVideoCapturer(SceneView view, int framePerSecond) {
         if (framePerSecond <= 0)
             throw new IllegalArgumentException("framePersecond must be greater than 0");
         this.view = view;
