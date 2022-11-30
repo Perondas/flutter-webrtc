@@ -43,8 +43,8 @@ import com.cloudwebrtc.webrtc.record.OutputAudioSamplesInterceptor;
 import com.cloudwebrtc.webrtc.utils.Callback;
 import com.cloudwebrtc.webrtc.utils.ConstraintsArray;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
-import com.cloudwebrtc.webrtc.utils.CustomVideoCapturer;
 import com.cloudwebrtc.webrtc.utils.EglUtils;
+import com.cloudwebrtc.webrtc.utils.FileVideoCapturer;
 import com.cloudwebrtc.webrtc.utils.MediaConstraintsUtils;
 import com.cloudwebrtc.webrtc.utils.ObjectType;
 import com.cloudwebrtc.webrtc.utils.PermissionUtils;
@@ -68,8 +68,6 @@ import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
-import io.github.sceneview.*;
-
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -78,7 +76,6 @@ import java.util.List;
 import java.util.Map;
 
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.github.sceneview.SceneView;
 
 /**
  * The implementation of {@code getUserMedia} extracted into a separate file in order to reduce
@@ -114,6 +111,8 @@ class GetUserMediaImpl {
     JavaAudioDeviceModule audioDeviceModule;
     private final SparseArray<MediaRecorderImpl> mediaRecorders = new SparseArray<>();
 
+    private final FileVideoCapturer bmpCapturer = new FileVideoCapturer();
+
     public void screenRequestPermissions(ResultReceiver resultReceiver) {
         final Activity activity = stateProvider.getActivity();
         if (activity == null) {
@@ -139,6 +138,10 @@ class GetUserMediaImpl {
         } catch (IllegalStateException ise) {
 
         }
+    }
+
+    public void setBitmap(byte[] bitmap) {
+        bmpCapturer.setBmp(bitmap);
     }
 
     public static class ScreenRequestPermissionsFragment extends Fragment {
@@ -642,7 +645,6 @@ class GetUserMediaImpl {
         return null;
     }
 
-    private SceneView view;
 
     private VideoTrack getUserVideo(ConstraintsMap constraints) {
         ConstraintsMap videoConstraintsMap = null;
@@ -678,18 +680,10 @@ class GetUserMediaImpl {
         isFacing = facingMode == null || !facingMode.equals("environment");
         String sourceId = getSourceIdConstraint(videoConstraintsMap);
 
-        if (view == null) {
-            view = new SceneView(applicationContext);
-        }
 
         VideoCapturer videoCapturer = null;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            videoCapturer = new CustomVideoCapturer(view, 20);
-        }
 
-        if (videoCapturer == null) {
-            return null;
-        }
+        videoCapturer = bmpCapturer;
 
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         VideoSource videoSource = pcFactory.createVideoSource(true);

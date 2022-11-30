@@ -166,6 +166,11 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
 
     final AnyThreadResult result = new AnyThreadResult(notSafeResult);
     switch (call.method) {
+      case "setImage": {
+        byte[] bytes = call.argument("bytes");
+        getUserMediaImpl.setBitmap(bytes);
+        break;
+      }
       case "createPeerConnection": {
         Map<String, Object> constraints = call.argument("constraints");
         Map<String, Object> configuration = call.argument("configuration");

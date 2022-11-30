@@ -27,6 +27,10 @@ class RTCVideoRenderer extends ValueNotifier<RTCVideoValue>
         .listen(eventListener, onError: errorListener);
   }
 
+  void setImage(Uint8List bytes) {
+    WebRTC.invokeMethod('setImage', <String, dynamic>{'bytes': bytes});
+  }
+
   @override
   int get videoWidth => value.width.toInt();
 
