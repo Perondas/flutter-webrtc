@@ -75,14 +75,9 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
             }
             return
         }
-        Log.d("Holder", holder.view.toString())
         if (holder.view == null) return
-        Log.d("Holder", "Not Null")
         val view = holder.view!!
         if (view.width == 0 || view.height == 0) return;
-        Log.d("Holder", "Has Size")
-
-
 
 
         // Draw view into bitmap backed canvas
@@ -98,11 +93,8 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
                         bmp!!.width, bmp!!.height, VideoFrame.TextureBuffer.Type.RGB,
                         textures[0], Matrix(), surfaceTextureHelper!!.handler, yuvConverter, null
                     )
-                    Log.d("Holder", "Flipping")
-                    //val flippedBitmap = createFlippedBitmap(bmp!!, true, false)
-                    Log.d("Holder", "Flipped")
+                    val flippedBitmap = createFlippedBitmap(bmp!!, true, false)
                     surfaceTextureHelper!!.handler.post {
-                        Log.d("Holder", "Posting")
                         if (bmp != null) {
                             GLES20.glTexParameteri(
                                 GLES20.GL_TEXTURE_2D,
@@ -117,7 +109,6 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
                             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
                             val i420Buf = yuvConverter.convert(buffer)
                             val videoFrame = VideoFrame(i420Buf, 180, captureTimeNs)
-                            Log.d("Holder", "Sending Frame")
                             capturerObserver!!.onFrameCaptured(videoFrame)
                             videoFrame.release()
                         }
@@ -131,7 +122,6 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
             }
             handlerThread.quitSafely()
         }, Handler(handlerThread.looper))
-        Log.d("holder", "returned")
     }
 
     override fun initialize(
@@ -157,7 +147,7 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
 
     @Throws(InterruptedException::class)
     override fun stopCapture() {
-        timer!!.cancel()
+        timer?.cancel()
     }
 
     override fun changeCaptureFormat(width: Int, height: Int, framerate: Int) {
@@ -166,6 +156,7 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
 
     override fun dispose() {
         // Empty on purpose
+        timer?.cancel()
     }
 
     override fun isScreencast(): Boolean {

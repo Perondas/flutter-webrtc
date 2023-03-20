@@ -1,44 +1,49 @@
 package com.cloudwebrtc.webrtc
+import android.R
 import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Toast
+import com.google.ar.core.ArCoreApk
+import com.google.ar.core.Config
+import com.google.ar.core.Session
+import com.google.ar.core.exceptions.*
+import com.google.ar.sceneform.ArSceneView
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.platform.PlatformView
-import io.github.sceneview.SceneView
-import io.github.sceneview.loaders.loadHdrIndirectLight
-import io.github.sceneview.loaders.loadHdrSkybox
-import io.github.sceneview.math.Position
-import io.github.sceneview.math.Rotation
-import io.github.sceneview.nodes.ModelNode
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 class SceneViewWrapper(
     context: Context,
     private val activity: Activity,
     id: Int,
     private val messenger: BinaryMessenger,
-    holder: ViewHolder
+    private val holder: ViewHolder
 ): PlatformView, MethodCallHandler {
-    private val sceneView: SceneView = SceneView(context)
-    private val _mainScope = CoroutineScope(Dispatchers.Main)
+    private val TAG: String = SceneViewWrapper::class.java.name
+
+    private var mUserRequestedInstall = true
+
+    private val sceneView: ArSceneView = ArSceneView(context)
+    //private val _mainScope = CoroutineScope(Dispatchers.Main)
     private lateinit var activityLifecycleCallbacks: Application.ActivityLifecycleCallbacks
     private val _channel = MethodChannel(messenger, "scene_view_$id")
 
     init {
         _channel.setMethodCallHandler(this)
         setupLifeCycle()
-        sceneView.pause()
-        sceneView.resume()
+        onResume()
         holder.view = sceneView;
+
+        sceneView.scene.addOnUpdateListener {
+
+        }
     }
 
     override fun getView(): View {
@@ -47,10 +52,18 @@ class SceneViewWrapper(
 
     override fun dispose() {
         activity.application.unregisterActivityLifecycleCallbacks(this.activityLifecycleCallbacks)
-        _mainScope.cancel()
+        holder.view = null
+        //_mainScope.cancel()
+        try {
+            onPause()
+            onDestroy()
+            ArSceneView.destroyAllResources()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
-
+/*
     private suspend fun showModel() {
         val hdrFile = "environments/studio_small_09_2k.hdr"
         sceneView.loadHdrIndirectLight(hdrFile, specularFilter = true) {
@@ -75,6 +88,8 @@ class SceneViewWrapper(
         Log.d("Done", "Done")
     }
 
+ */
+
     private fun setupLifeCycle() {
         activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
@@ -87,12 +102,12 @@ class SceneViewWrapper(
 
             override fun onActivityResumed(activity: Activity) {
                 Log.d("Wrapper","Resumed")
-                sceneView.resume()
+                onResume()
             }
 
             override fun onActivityPaused(activity: Activity) {
                 Log.d("Wrapper","Paused")
-                sceneView.pause()
+                onPause()
             }
 
             override fun onActivityStopped(activity: Activity) {
@@ -103,11 +118,100 @@ class SceneViewWrapper(
 
             override fun onActivityDestroyed(activity: Activity) {
                 Log.d("Wrapper","Destroyed")
-                sceneView.destroy()
+                onDestroy()
             }
         }
 
         activity.application.registerActivityLifecycleCallbacks(this.activityLifecycleCallbacks)
+    }
+
+    private fun onResume() {
+        // Create session if there is none
+        if (sceneView.session == null) {
+            Log.d(TAG, "ARSceneView session is null. Trying to initialize")
+            try {
+                var session: Session? =
+                    if (ArCoreApk.getInstance().requestInstall(activity, mUserRequestedInstall) ==
+                    ArCoreApk.InstallStatus.INSTALL_REQUESTED) {
+                    Log.d(TAG, "Install of ArCore APK requested")
+                    null
+                } else {
+                    Session(activity)
+                }
+
+                if (session == null) {
+                    // Ensures next invocation of requestInstall() will either return
+                    // INSTALLED or throw an exception.
+                    mUserRequestedInstall = false
+                    return
+                } else {
+                    val config = Config(session)
+                    config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                    config.focusMode = Config.FocusMode.AUTO
+
+                    session.configure(config)
+                    sceneView.setupSession(session)
+                }
+            } catch (ex: UnavailableUserDeclinedInstallationException) {
+                // Display an appropriate message to the user zand return gracefully.
+                Toast.makeText(
+                    activity,
+                    "TODO: handle exception " + ex.localizedMessage,
+                    Toast.LENGTH_LONG)
+                    .show()
+                return
+            } catch (ex: UnavailableArcoreNotInstalledException) {
+                Toast.makeText(activity, "Please install ARCore", Toast.LENGTH_LONG).show()
+                return
+            } catch (ex: UnavailableApkTooOldException) {
+                Toast.makeText(activity, "Please update ARCore", Toast.LENGTH_LONG).show()
+                return
+            } catch (ex: UnavailableSdkTooOldException) {
+                Toast.makeText(activity, "Please update this app", Toast.LENGTH_LONG).show()
+                return
+            } catch (ex: UnavailableDeviceNotCompatibleException) {
+                Toast.makeText(activity, "This device does not support AR", Toast.LENGTH_LONG)
+                    .show()
+                return
+            } catch (e: Exception) {
+                Toast.makeText(activity, "Failed to create AR session", Toast.LENGTH_LONG).show()
+                return
+            }
+        }
+
+        try {
+            sceneView.resume()
+        } catch (ex: CameraNotAvailableException) {
+            Log.d(TAG, "Unable to get camera$ex")
+            activity.finish()
+            return
+        } catch (e : Exception){
+            return
+        }
+    }
+
+    private  fun onPause() {
+        // hide instructions view if no longer required
+        /*
+        if (showAnimatedGuide){
+            val view = activity.findViewById(R.id.content) as ViewGroup
+            view.removeView(animatedGuide)
+            showAnimatedGuide = false
+        }
+
+         */
+        sceneView.pause()
+    }
+
+    private fun onDestroy() {
+        try {
+            sceneView.session?.close()
+            sceneView.destroy()
+            //sceneView.scene?.removeOnUpdateListener(sceneUpdateListener)
+            //sceneView.scene?.removeOnPeekTouchListener(onNodeTapListener)
+        }catch (e : Exception){
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -135,9 +239,6 @@ class SceneViewWrapper(
         // Methods called from the method channel in sceneview_controller.dart will end up here
         // Simply interact wiht your sceneView instance from here
         if (call.method == "showDemo") {
-            _mainScope.launch {
-                showModel()
-            }
             result.success(null)
             return
         }

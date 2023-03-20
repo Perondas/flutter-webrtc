@@ -49,9 +49,13 @@ android {
 }
 
 dependencies {
-    implementation 'com.github.webrtc-sdk:android:104.5112.05'
+    implementation 'com.github.webrtc-sdk:android:104.5112.07'
     implementation 'com.github.davidliu:audioswitch:c498d866c57f1d88056d5e7e7a78d622e3b0c046'
     implementation 'androidx.annotation:annotation:1.1.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation 'io.github.sceneview:sceneview:1.0.0'
+
+    implementation "com.google.ar:core:1.22.0"
+
+    implementation 'com.google.ar.sceneform:core:1.15.0'
+    implementation 'com.google.ar.sceneform:assets:1.15.0'
 }

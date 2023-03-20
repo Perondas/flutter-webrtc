@@ -1,7 +1,7 @@
 package com.cloudwebrtc.webrtc
 
-import io.github.sceneview.SceneView
+import com.google.ar.sceneform.ArSceneView
 
 class ViewHolder {
-    public var view: SceneView? = null;
+    public var view: ArSceneView? = null;
 }
