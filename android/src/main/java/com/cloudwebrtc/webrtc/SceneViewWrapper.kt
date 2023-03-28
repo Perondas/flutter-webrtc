@@ -1,23 +1,26 @@
 package com.cloudwebrtc.webrtc
-import android.R
+
+import android.R.attr.*
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
+import android.opengl.Matrix
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
-import com.google.ar.core.ArCoreApk
-import com.google.ar.core.Config
-import com.google.ar.core.Session
+import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
 import com.google.ar.sceneform.ArSceneView
+import com.google.ar.sceneform.rendering.PlaneRenderer
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.platform.PlatformView
+import java.nio.ByteBuffer
+
 
 class SceneViewWrapper(
     context: Context,
@@ -214,6 +217,9 @@ class SceneViewWrapper(
         }
     }
 
+    var markRequest: MarkRequest? = null;
+    var markRequested: Boolean = false;
+
     /**
      * Handles the specified method call received from Flutter.
      *
@@ -242,6 +248,148 @@ class SceneViewWrapper(
             result.success(null)
             return
         }
+        if (call.method == "markRequest") {
+            activity.runOnUiThread {
+                val frame = sceneView.arFrame ?: return@runOnUiThread
+
+
+
+                val viewM = FloatArray(16)
+                val projM = FloatArray(16)
+
+                frame.camera.getViewMatrix(viewM, 0)
+                frame.camera.getProjectionMatrix(projM, 0, 0.1f, 100f)
+
+                val anchor = sceneView.session!!.createAnchor(frame.camera.pose)
+
+                val fr = holder.lastFrame!!
+
+                markRequest = MarkRequest(sceneView.width, sceneView.height, viewM, projM,
+                    anchor,
+                    fr.copy(fr.config, false))
+
+                val size: Int = fr.rowBytes * fr.height
+                val byteBuffer = ByteBuffer.allocate(size)
+                fr.copyPixelsToBuffer(byteBuffer)
+                val byteArray = byteBuffer.array()
+
+                result.success(byteArray)
+            }
+
+            return
+        }
+        /*
+        else if (call.method == "markNow") {
+            var m = markRequest ?: return
+            val x: Float = call.argument("x")
+            val y: Float = call.argument("y")
+
+            val ray =  createRay(x, y, m.projM, m.viewM, m.height, m.width)
+
+            activity.runOnUiThread {
+                val frame = sceneView.arFrame ?: return@runOnUiThread
+
+                val diff = m.anchor.pose.compose(frame.camera.pose.inverse())
+                val vec = diff.rotateVector(ray)
+
+                val hitResultList = frame.hitTest(m.anchor.pose.translation, 0, vec, 0)
+
+                m.anchor.detach()
+
+                val firstHitResult =
+                    hitResultList.firstOrNull { hit ->
+                        when (val trackable = hit.trackable!!) {
+                            is Plane ->
+                                trackable.isPoseInPolygon(hit.hitPose) &&
+                                        calculateDistanceToPlane(hit.hitPose, m.anchor.pose) > 0
+                            is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
+                            is InstantPlacementPoint -> true
+                            else -> false
+                        }
+                    }
+            }
+
+
+        }
+
+         */
         result.notImplemented()
+    }
+
+    fun calculateDistanceToPlane(planePose: Pose, cameraPose: Pose): Float {
+        val normal = FloatArray(3)
+        val cameraX = cameraPose.tx()
+        val cameraY = cameraPose.ty()
+        val cameraZ = cameraPose.tz()
+        // Get transformed Y axis of plane's coordinate system.
+        planePose.getTransformedAxis(1, 1.0f, normal, 0)
+        // Compute dot product of plane's normal with vector from camera to plane center.
+        return (cameraX - planePose.tx()) * normal[0] + (cameraY - planePose.ty()) * normal[1] + (cameraZ - planePose.tz()) * normal[2]
+    }
+
+    private fun createRay(x: Float, y: Float, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
+        val start = unproject(x, y,0f, view, projection, height, width)
+        val end = unproject(x, y,1f, view, projection, height, width)
+
+        return arrayOf(
+            end[0] - start[0],
+            end[1] - start[1],
+            end[2] - start[2]
+        ).toFloatArray()
+    }
+
+    private fun unproject(x: Float, y: Float, z: Float, viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
+        val m = FloatArray(16)
+        Matrix.multiplyMM(m, 0,projectionMatrix,0, viewMatrix,0)
+        Matrix.invertM(m,0,m,0)
+
+        val yc = height - y
+
+        val vec = arrayOf(
+            x / width * 2f - 1f,
+            yc / height * 2f - 1f,
+            2f * z - 1f,
+            1f
+        ).toFloatArray()
+        val res = FloatArray(4)
+
+        Matrix.multiplyMV(res,0, m,0,vec,0)
+
+        val w = 1f / res[3]
+
+        return res.map { it * w }.subList(0,3).toFloatArray()
+    }
+}
+
+data class MarkRequest(
+    val width: Int,
+    val height: Int,
+    val viewM: FloatArray,
+    val projM: FloatArray,
+    val anchor: Anchor,
+    val frame: Bitmap
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as MarkRequest
+
+        if (width != other.width) return false
+        if (height != other.height) return false
+        if (!viewM.contentEquals(other.viewM)) return false
+        if (!projM.contentEquals(other.projM)) return false
+        if (anchor != other.anchor) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = width
+        result = 31 * result + height
+        result = 31 * result + viewM.contentHashCode()
+        result = 31 * result + projM.contentHashCode()
+        result = 31 * result + anchor.hashCode()
+        return result
     }
 }
