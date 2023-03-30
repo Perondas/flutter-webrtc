@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.ar.core.examples.java.common.samplerender.arcore;
+package samplerenderer.arcore;
 
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -22,12 +22,6 @@ import android.media.Image;
 import android.opengl.GLES30;
 import android.util.Log;
 import com.google.ar.core.ImageFormat;
-import com.google.ar.core.examples.java.common.samplerender.GLError;
-import com.google.ar.core.examples.java.common.samplerender.Mesh;
-import com.google.ar.core.examples.java.common.samplerender.SampleRender;
-import com.google.ar.core.examples.java.common.samplerender.Shader;
-import com.google.ar.core.examples.java.common.samplerender.Texture;
-import com.google.ar.core.examples.java.common.samplerender.VertexBuffer;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,6 +30,13 @@ import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+
+import samplerenderer.GLError;
+import samplerenderer.Mesh;
+import samplerenderer.SampleRender;
+import samplerenderer.Shader;
+import samplerenderer.Texture;
+import samplerenderer.VertexBuffer;
 
 /**
  * Filters a provided cubemap into a cubemap lookup texture which is a function of the direction of

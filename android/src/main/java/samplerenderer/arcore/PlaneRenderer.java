@@ -13,20 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.ar.core.examples.java.common.samplerender.arcore;
+package samplerenderer.arcore;
 
 import android.opengl.Matrix;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Pose;
 import com.google.ar.core.TrackingState;
-import com.google.ar.core.examples.java.common.samplerender.IndexBuffer;
-import com.google.ar.core.examples.java.common.samplerender.Mesh;
-import com.google.ar.core.examples.java.common.samplerender.SampleRender;
-import com.google.ar.core.examples.java.common.samplerender.Shader;
-import com.google.ar.core.examples.java.common.samplerender.Shader.BlendFactor;
-import com.google.ar.core.examples.java.common.samplerender.Texture;
-import com.google.ar.core.examples.java.common.samplerender.VertexBuffer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -39,6 +32,13 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import samplerenderer.IndexBuffer;
+import samplerenderer.Mesh;
+import samplerenderer.SampleRender;
+import samplerenderer.Shader;
+import samplerenderer.Texture;
+import samplerenderer.VertexBuffer;
 
 /** Renders the detected AR planes. */
 public class PlaneRenderer {
@@ -116,10 +116,10 @@ public class PlaneRenderer {
             .setTexture("u_Texture", texture)
             .setVec4("u_GridControl", GRID_CONTROL)
             .setBlend(
-                BlendFactor.DST_ALPHA, // RGB (src)
-                BlendFactor.ONE, // RGB (dest)
-                BlendFactor.ZERO, // ALPHA (src)
-                BlendFactor.ONE_MINUS_SRC_ALPHA) // ALPHA (dest)
+                Shader.BlendFactor.DST_ALPHA, // RGB (src)
+                Shader.BlendFactor.ONE, // RGB (dest)
+                Shader.BlendFactor.ZERO, // ALPHA (src)
+                Shader.BlendFactor.ONE_MINUS_SRC_ALPHA) // ALPHA (dest)
             .setDepthWrite(false);
 
     indexBufferObject = new IndexBuffer(render, /*entries=*/ null);

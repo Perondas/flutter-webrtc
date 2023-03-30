@@ -74,69 +74,13 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
                     videoFrame.release()
                 }
             }
-            if (holder.lastFrame != null) {
-                holder.lastFrame!!.recycle()
-                holder.lastFrame = null
-            }
-            holder.lastFrame = bmp
             return
         }
         if (holder.view == null) return
-        val view = holder.view!!
-        if (view.width == 0 || view.height == 0) return;
 
 
-        // Draw view into bitmap backed canvas
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        val handlerThread = HandlerThread(ThreadLocalRandom.current().nextInt(0, 1000000+ 1).toString())
-        handlerThread.start()
-        GLES20.glGenTextures(0, textures, 0)
-        try {
-            PixelCopy.request(view, bitmap, OnPixelCopyFinishedListener { copyResult: Int ->
-                if (copyResult == PixelCopy.SUCCESS) {
-                    val bmp = getResizedBitmap(bitmap, 500)
-                    if (bmp != null) {
-                        val buffer = TextureBufferImpl(
-                            bmp!!.width, bmp!!.height, VideoFrame.TextureBuffer.Type.RGB,
-                            textures[0], Matrix(), surfaceTextureHelper!!.handler, yuvConverter, null
-                        )
-                        val flippedBitmap = createFlippedBitmap(bmp!!, true, false)
-                        surfaceTextureHelper!!.handler.post {
-                            if (bmp != null) {
-                                GLES20.glTexParameteri(
-                                    GLES20.GL_TEXTURE_2D,
-                                    GLES20.GL_TEXTURE_MIN_FILTER,
-                                    GLES20.GL_NEAREST
-                                )
-                                GLES20.glTexParameteri(
-                                    GLES20.GL_TEXTURE_2D,
-                                    GLES20.GL_TEXTURE_MAG_FILTER,
-                                    GLES20.GL_NEAREST
-                                )
-                                GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bmp, 0)
-                                val i420Buf = yuvConverter.convert(buffer)
-                                val videoFrame = VideoFrame(i420Buf, 180, captureTimeNs)
-                                capturerObserver!!.onFrameCaptured(videoFrame)
-                                videoFrame.release()
-                            }
-                        }
-                        if (holder.lastFrame != null) {
-                            holder.lastFrame!!.recycle()
-                            holder.lastFrame = null
-                        }
-                        holder.lastFrame = bmp
-                    } else {
-                        Log.d("Holder", "No bitmap")
-                    }
-                } else {
-                    Log.d("Holder", "failed Copy")
-                    Log.e("Pixel_copy-->", "Couldn't create bitmap of the SurfaceView")
-                }
-                handlerThread.quitSafely()
-            }, Handler(handlerThread.looper))
-        } catch (e: Exception) {
-            Log.e("ScreenviewCapturer","Failed to capture screen ")
-        }
+        capturerObserver!!.onFrameCaptured(videoFrame)
+        videoFrame.release()
     }
 
     override fun initialize(

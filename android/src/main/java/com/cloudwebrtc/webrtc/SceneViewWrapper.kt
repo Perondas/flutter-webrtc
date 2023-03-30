@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
+import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import android.os.Bundle
 import android.util.Log
@@ -12,45 +13,82 @@ import android.view.View
 import android.widget.Toast
 import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
-import com.google.ar.sceneform.ArSceneView
-import com.google.ar.sceneform.rendering.PlaneRenderer
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.platform.PlatformView
+import samplerenderer.HelloArRenderer
+import samplerenderer.SampleRender
+import samplerenderer.helpers.ARCoreSessionLifecycleHelper
+import samplerenderer.helpers.DepthSettings
+import samplerenderer.helpers.InstantPlacementSettings
 import java.nio.ByteBuffer
 
 
 class SceneViewWrapper(
-    context: Context,
-    private val activity: Activity,
+    val context: Context,
+    val activity: Activity,
     id: Int,
     private val messenger: BinaryMessenger,
     private val holder: ViewHolder
 ): PlatformView, MethodCallHandler {
     private val TAG: String = SceneViewWrapper::class.java.name
 
-    private var mUserRequestedInstall = true
 
-    private val sceneView: ArSceneView = ArSceneView(context)
-    //private val _mainScope = CoroutineScope(Dispatchers.Main)
+    val view: GLSurfaceView = GLSurfaceView(context)
     private lateinit var activityLifecycleCallbacks: Application.ActivityLifecycleCallbacks
+
+    lateinit var arCoreSessionHelper: ARCoreSessionLifecycleHelper
+    private lateinit var renderer: HelloArRenderer
+
+    val instantPlacementSettings = InstantPlacementSettings()
+    val depthSettings = DepthSettings()
+
     private val _channel = MethodChannel(messenger, "scene_view_$id")
 
     init {
+        arCoreSessionHelper = ARCoreSessionLifecycleHelper(activity)
+
+        arCoreSessionHelper.exceptionCallback =
+            { exception ->
+                val message =
+                    when (exception) {
+                        is UnavailableUserDeclinedInstallationException ->
+                            "Please install Google Play Services for AR"
+                        is UnavailableApkTooOldException -> "Please update ARCore"
+                        is UnavailableSdkTooOldException -> "Please update this app"
+                        is UnavailableDeviceNotCompatibleException -> "This device does not support AR"
+                        is CameraNotAvailableException -> "Camera not available. Try restarting the app."
+                        else -> "Failed to create AR session: $exception"
+                    }
+                Log.e(TAG, "ARCore threw an exception", exception)
+            }
+
+        arCoreSessionHelper.beforeSessionResume = ::configureSession
+
+        renderer = HelloArRenderer(this, holder)
+
+
+
+        SampleRender(view, renderer, context.assets)
+
+        //activity.setContentView(view)
+
+        depthSettings.onCreate(context)
+        instantPlacementSettings.onCreate(context)
+
         _channel.setMethodCallHandler(this)
         setupLifeCycle()
-        onResume()
-        holder.view = sceneView;
 
-        sceneView.scene.addOnUpdateListener {
+        holder.view = renderer;
+        //onPause()
 
-        }
     }
 
     override fun getView(): View {
-        return sceneView
+
+        return view
     }
 
     override fun dispose() {
@@ -60,10 +98,35 @@ class SceneViewWrapper(
         try {
             onPause()
             onDestroy()
-            ArSceneView.destroyAllResources()
+           // ArSceneView.destroyAllResources()
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    // Configure the session, using Lighting Estimation, and Depth mode.
+    private fun configureSession(session: Session) {
+        session.configure(
+            session.config.apply {
+                lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+
+                // Depth API is used if it is configured in Hello AR's settings.
+                depthMode =
+                    if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                        Config.DepthMode.AUTOMATIC
+                    } else {
+                        Config.DepthMode.DISABLED
+                    }
+
+                // Instant Placement is used if it is configured in Hello AR's settings.
+                instantPlacementMode =
+                    if (instantPlacementSettings.isInstantPlacementEnabled) {
+                        Config.InstantPlacementMode.LOCAL_Y_UP
+                    } else {
+                        Config.InstantPlacementMode.DISABLED
+                    }
+            }
+        )
     }
 
 /*
@@ -105,6 +168,7 @@ class SceneViewWrapper(
 
             override fun onActivityResumed(activity: Activity) {
                 Log.d("Wrapper","Resumed")
+
                 onResume()
             }
 
@@ -129,95 +193,24 @@ class SceneViewWrapper(
     }
 
     private fun onResume() {
-        // Create session if there is none
-        if (sceneView.session == null) {
-            Log.d(TAG, "ARSceneView session is null. Trying to initialize")
-            try {
-                var session: Session? =
-                    if (ArCoreApk.getInstance().requestInstall(activity, mUserRequestedInstall) ==
-                    ArCoreApk.InstallStatus.INSTALL_REQUESTED) {
-                    Log.d(TAG, "Install of ArCore APK requested")
-                    null
-                } else {
-                    Session(activity)
-                }
+        arCoreSessionHelper.onResume()
+        renderer.onResume()
 
-                if (session == null) {
-                    // Ensures next invocation of requestInstall() will either return
-                    // INSTALLED or throw an exception.
-                    mUserRequestedInstall = false
-                    return
-                } else {
-                    val config = Config(session)
-                    config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
-                    config.focusMode = Config.FocusMode.AUTO
-
-                    session.configure(config)
-                    sceneView.setupSession(session)
-                }
-            } catch (ex: UnavailableUserDeclinedInstallationException) {
-                // Display an appropriate message to the user zand return gracefully.
-                Toast.makeText(
-                    activity,
-                    "TODO: handle exception " + ex.localizedMessage,
-                    Toast.LENGTH_LONG)
-                    .show()
-                return
-            } catch (ex: UnavailableArcoreNotInstalledException) {
-                Toast.makeText(activity, "Please install ARCore", Toast.LENGTH_LONG).show()
-                return
-            } catch (ex: UnavailableApkTooOldException) {
-                Toast.makeText(activity, "Please update ARCore", Toast.LENGTH_LONG).show()
-                return
-            } catch (ex: UnavailableSdkTooOldException) {
-                Toast.makeText(activity, "Please update this app", Toast.LENGTH_LONG).show()
-                return
-            } catch (ex: UnavailableDeviceNotCompatibleException) {
-                Toast.makeText(activity, "This device does not support AR", Toast.LENGTH_LONG)
-                    .show()
-                return
-            } catch (e: Exception) {
-                Toast.makeText(activity, "Failed to create AR session", Toast.LENGTH_LONG).show()
-                return
-            }
-        }
-
-        try {
-            sceneView.resume()
-        } catch (ex: CameraNotAvailableException) {
-            Log.d(TAG, "Unable to get camera$ex")
-            activity.finish()
-            return
-        } catch (e : Exception){
-            return
-        }
     }
 
     private  fun onPause() {
-        // hide instructions view if no longer required
-        /*
-        if (showAnimatedGuide){
-            val view = activity.findViewById(R.id.content) as ViewGroup
-            view.removeView(animatedGuide)
-            showAnimatedGuide = false
-        }
+        arCoreSessionHelper.onPause()
+        renderer.onPause()
 
-         */
-        sceneView.pause()
     }
 
     private fun onDestroy() {
-        try {
-            sceneView.session?.close()
-            sceneView.destroy()
-            //sceneView.scene?.removeOnUpdateListener(sceneUpdateListener)
-            //sceneView.scene?.removeOnPeekTouchListener(onNodeTapListener)
-        }catch (e : Exception){
-            e.printStackTrace();
-        }
+        arCoreSessionHelper.onDestroy()
+
+
     }
 
-    var markRequest: MarkRequest? = null;
+    private var markRequest: MarkRequest? = null;
     var markRequested: Boolean = false;
 
     /**
@@ -245,9 +238,11 @@ class SceneViewWrapper(
         // Methods called from the method channel in sceneview_controller.dart will end up here
         // Simply interact wiht your sceneView instance from here
         if (call.method == "showDemo") {
+            onResume()
             result.success(null)
             return
         }
+        /*
         if (call.method == "markRequest") {
             activity.runOnUiThread {
                 val frame = sceneView.arFrame ?: return@runOnUiThread
@@ -278,6 +273,8 @@ class SceneViewWrapper(
 
             return
         }
+
+         */
         /*
         else if (call.method == "markNow") {
             var m = markRequest ?: return

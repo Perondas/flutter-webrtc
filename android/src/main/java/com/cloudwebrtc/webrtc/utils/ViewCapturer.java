@@ -61,7 +61,7 @@ public class ViewCapturer implements VideoCapturer, VideoSink {
         public void run() {
             if (holder.getView() != null) {
                 Log.e("Holder","Done");
-                view = holder.getView();
+               // view = holder.getView();
             } else {
                 Log.e("Holder", "Return");
                 view = new SurfaceView(context);

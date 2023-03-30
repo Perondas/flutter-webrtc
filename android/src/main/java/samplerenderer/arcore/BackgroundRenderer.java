@@ -13,23 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.ar.core.examples.java.common.samplerender.arcore;
+package samplerenderer.arcore;
 
 import android.media.Image;
 import android.opengl.GLES30;
 import com.google.ar.core.Coordinates2d;
 import com.google.ar.core.Frame;
-import com.google.ar.core.examples.java.common.samplerender.Framebuffer;
-import com.google.ar.core.examples.java.common.samplerender.Mesh;
-import com.google.ar.core.examples.java.common.samplerender.SampleRender;
-import com.google.ar.core.examples.java.common.samplerender.Shader;
-import com.google.ar.core.examples.java.common.samplerender.Texture;
-import com.google.ar.core.examples.java.common.samplerender.VertexBuffer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.HashMap;
+
+import samplerenderer.Framebuffer;
+import samplerenderer.Mesh;
+import samplerenderer.SampleRender;
+import samplerenderer.Shader;
+import samplerenderer.Texture;
+import samplerenderer.VertexBuffer;
 
 /**
  * This class both renders the AR camera background and composes the a scene foreground. The camera
@@ -238,7 +239,7 @@ public class BackgroundRenderer {
    * com.google.ar.core.Camera#getProjectionMatrix(float[], int, float, float)}.
    */
   public void drawVirtualScene(
-      SampleRender render, Framebuffer virtualSceneFramebuffer, float zNear, float zFar) {
+          SampleRender render, Framebuffer virtualSceneFramebuffer, float zNear, float zFar) {
     occlusionShader.setTexture(
         "u_VirtualSceneColorTexture", virtualSceneFramebuffer.getColorTexture());
     if (useOcclusion) {

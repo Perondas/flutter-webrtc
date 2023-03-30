@@ -1,10 +1,14 @@
 package com.cloudwebrtc.webrtc
 
 import android.graphics.Bitmap
-import com.google.ar.sceneform.ArSceneView
+import org.webrtc.VideoFrame
+import samplerenderer.HelloArRenderer
 
 class ViewHolder {
-    public var view: ArSceneView? = null;
+    public var view: HelloArRenderer? = null;
 
-    public var lastFrame: Bitmap? = null;
+    public var frame: VideoFrame? = null;
+
+    public var height: Int? = null;
+    public var width: Int? = null;
 }
