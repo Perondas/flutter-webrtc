@@ -19,16 +19,12 @@ import android.opengl.GLES30
 import android.opengl.Matrix
 import android.util.Log
 import android.view.MotionEvent
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
 import com.cloudwebrtc.webrtc.SceneViewWrapper
 import com.cloudwebrtc.webrtc.ViewHolder
 import com.google.ar.core.*
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.NotYetAvailableException
-import org.webrtc.TextureBufferImpl
-import org.webrtc.VideoFrame
-
+import org.webrtc.JniCommon
 import samplerenderer.arcore.BackgroundRenderer
 import samplerenderer.arcore.PlaneRenderer
 import samplerenderer.arcore.SpecularCubemapFilter
@@ -36,6 +32,7 @@ import samplerenderer.helpers.DisplayRotationHelper
 import samplerenderer.helpers.TrackingStateHelper
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.IntBuffer
 
 
 /** Renders the HelloAR application using our example Renderer. */
@@ -82,7 +79,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
   lateinit var render: SampleRender
   private lateinit var planeRenderer: PlaneRenderer
   private lateinit var backgroundRenderer: BackgroundRenderer
-  lateinit var virtualSceneFramebuffer: Framebuffer
+  var virtualSceneFramebuffer: Framebuffer? = null
   private var hasSetTextureNames = false
 
   // Point Cloud
@@ -241,13 +238,13 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
   override fun onSurfaceChanged(render: SampleRender, width: Int, height: Int) {
     displayRotationHelper.onSurfaceChanged(width, height)
-    virtualSceneFramebuffer.resize(width, height)
+    virtualSceneFramebuffer!!.resize(width, height)
   }
 
   override fun onDrawFrame(render: SampleRender) {
     val session = session ?: return
 
-    virtualSceneFramebuffer.colorTexture
+    virtualSceneFramebuffer!!.colorTexture
 
     // Texture names should only be set once on a GL thread unless they change. This is done during
     // onDrawFrame rather than onSurfaceCreated since the session is not guaranteed to have been
@@ -415,13 +412,38 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
 
-    val buffer = TextureBufferImpl(
-      activity.view.width,activity.view.height, VideoFrame.TextureBuffer.Type.RGB,
-      virtualSceneFramebuffer.colorTexture.textureId, android.graphics.Matrix(), surfaceTextureHelper!!.handler, yuvConverter, null
-    )
+    holder.height = activity.view.height
+    holder.width = activity.view.width
+    synchronized(holder.needsNewFrame) {
+      if (holder.needsNewFrame) {
+        val currentFBORead = IntBuffer.allocate(1)
+        val currentFBOWrite = IntBuffer.allocate(1)
 
-    val i420Buf = yuvConverter.convert(buffer)
-    val videoFrame = VideoFrame(i420Buf, 180, captureTimeNs)
+        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBOWrite[0]);
+        GLError.maybeThrowGLException("", "glBindFramebuffer")
+
+        val byteBuffer = JniCommon.nativeAllocateByteBuffer(
+          holder.height!! *
+                  holder.width!! * 4
+        )
+
+        GLES30.glReadPixels(
+          0,
+          0,
+          activity.view.width,
+          activity.view.height,
+          GLES30.GL_RGBA,
+          GLES30.GL_UNSIGNED_BYTE,
+          byteBuffer
+        )
+        GLError.maybeThrowGLException("", "glReadPixels")
+
+        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBORead[0]);
+
+        holder.byteBuffer = byteBuffer
+        holder.needsNewFrame = false
+      }
+    }
   }
 
   /** Checks if we detected at least one plane. */

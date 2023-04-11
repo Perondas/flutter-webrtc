@@ -87,7 +87,6 @@ class SceneViewWrapper(
     }
 
     override fun getView(): View {
-
         return view
     }
 
