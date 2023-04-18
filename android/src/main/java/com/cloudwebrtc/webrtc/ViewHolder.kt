@@ -9,14 +9,10 @@ import java.util.Objects
 import java.util.concurrent.locks.Lock
 
 class ViewHolder {
-    public var needsNewFrame: Boolean = true;
+    public val lock: Object = Object()
+    public var needsNewFrame: Boolean = true
+    public var byteBuffer: ByteBuffer? = null
 
-    public var view: HelloArRenderer? = null;
-
-    public var frame: VideoFrame? = null;
-
-    public var byteBuffer: ByteBuffer? = null;
-
-    public var height: Int? = null;
-    public var width: Int? = null;
+    public var height: Int? = null
+    public var width: Int? = null
 }

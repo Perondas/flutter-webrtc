@@ -49,7 +49,6 @@ import com.cloudwebrtc.webrtc.utils.MediaConstraintsUtils;
 import com.cloudwebrtc.webrtc.utils.ObjectType;
 import com.cloudwebrtc.webrtc.utils.PermissionUtils;
 import com.cloudwebrtc.webrtc.utils.SceneviewCapturer;
-import com.cloudwebrtc.webrtc.utils.ViewCapturer;
 
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;

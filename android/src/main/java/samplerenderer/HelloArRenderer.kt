@@ -33,6 +33,7 @@ import samplerenderer.helpers.TrackingStateHelper
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
+import io.flutter.plugin.common.MethodChannel
 
 
 /** Renders the HelloAR application using our example Renderer. */
@@ -75,6 +76,11 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
   }
 
   //private val scope = CoroutineScope(Dispatchers.Main)
+
+  public val requestMutex: Object = Object()
+  public var request: MethodChannel.Result? = null
+  public val markMutex: Object = Object()
+  public var markRequest: MarkStore? = null
 
   lateinit var render: SampleRender
   private lateinit var planeRenderer: PlaneRenderer
@@ -308,9 +314,6 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       }
     }
 
-    // Handle one tap per frame.
-    handleTap(frame, camera)
-
     handleRequest(frame, camera)
 
     // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
@@ -407,39 +410,50 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
     }
 
-
-
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
+    var needsNew = false
+    synchronized(holder.lock) {
+      holder.height = activity.view.height
+      holder.width = activity.view.width
+      needsNew = holder.needsNewFrame
 
-    holder.height = activity.view.height
-    holder.width = activity.view.width
-    synchronized(holder.needsNewFrame) {
-      if (holder.needsNewFrame) {
-        val currentFBORead = IntBuffer.allocate(1)
-        val currentFBOWrite = IntBuffer.allocate(1)
+      if (holder.byteBuffer != null && holder.needsNewFrame) {
+        JniCommon.nativeFreeByteBuffer(holder.byteBuffer)
+        holder.byteBuffer = null
+      }
+    }
 
-        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBOWrite[0]);
-        GLError.maybeThrowGLException("", "glBindFramebuffer")
+    if (needsNew) {
+      val currentFBORead = IntBuffer.allocate(1)
+      val currentFBOWrite = IntBuffer.allocate(1)
 
-        val byteBuffer = JniCommon.nativeAllocateByteBuffer(
-          holder.height!! *
-                  holder.width!! * 4
-        )
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBOWrite[0]);
+      GLError.maybeThrowGLException("", "glBindFramebuffer")
 
-        GLES30.glReadPixels(
-          0,
-          0,
-          activity.view.width,
-          activity.view.height,
-          GLES30.GL_RGBA,
-          GLES30.GL_UNSIGNED_BYTE,
-          byteBuffer
-        )
-        GLError.maybeThrowGLException("", "glReadPixels")
+      val byteBuffer = JniCommon.nativeAllocateByteBuffer(
+        holder.height!! *
+                holder.width!! * 4
+      )
 
-        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBORead[0]);
+      GLES30.glReadPixels(
+        0,
+        0,
+        holder.width!!,
+        holder.height!!,
+        GLES30.GL_RGBA,
+        GLES30.GL_UNSIGNED_BYTE,
+        byteBuffer
+      )
+      GLError.maybeThrowGLException("", "glReadPixels")
 
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBORead[0]);
+
+      synchronized(holder.lock) {
+        if (holder.byteBuffer != null) {
+          JniCommon.nativeFreeByteBuffer(holder.byteBuffer)
+          holder.byteBuffer = null
+        }
         holder.byteBuffer = byteBuffer
         holder.needsNewFrame = false
       }
@@ -510,86 +524,78 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     )
   }
 
-  private var request: MarkRequest? = null
-
   private fun handleRequest(frame: Frame, camera: Camera) {
     if (camera.trackingState != TrackingState.TRACKING) return
-    val req = request ?: return
-    request = null
+    synchronized(requestMutex) {
+      val req = request ?: return
+      request = null
 
-    val diff = (req.anchor.pose.inverse().compose(camera.pose))
 
-    val hitResultList = frame.hitTest(req.anchor.pose.translation, 0, camera.pose.compose(diff.inverse().compose(diff.inverse())).rotateVector(req.ray), 0)
+      val pjM = FloatArray(16)
+      camera.getProjectionMatrix(pjM, 0, Z_NEAR, Z_FAR)
 
-    req.anchor.detach()
+      val vM = FloatArray(16)
+      camera.getViewMatrix(vM, 0 )
 
-    // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
-    // or Instant Placement Point.
-    val firstHitResult =
-      hitResultList.firstOrNull { hit ->
-        when (val trackable = hit.trackable!!) {
-          is Plane ->
-            trackable.isPoseInPolygon(hit.hitPose) &&
-                    PlaneRenderer.calculateDistanceToPlane(hit.hitPose, req.anchor.pose) > 0
-          is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
-          is InstantPlacementPoint -> true
-          // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
-          is DepthPoint -> true
-          else -> false
+      val anchor = session!!.createAnchor(camera.pose)
+
+      val height = activity.view.height
+      val width = activity.view.width
+
+      synchronized(markMutex) {
+        markRequest = MarkStore(vM, pjM, anchor, null, null, null, activity.view.height, activity.view.width)
+      }
+
+      req.success(null)
+    }
+
+    synchronized(markMutex) {
+      val req = markRequest ?: return
+      if (req.x == null || req.y == null) return
+      markRequest = null
+
+      val diff = (req.origin.pose.inverse().compose(camera.pose))
+
+      val ray = createRay(req.x!!, req.y!!, req.projMatrix, req.viewMatrix, req.height, req.width)
+
+      val hitResultList = frame.hitTest(req.origin.pose.translation, 0, camera.pose.compose(diff.inverse().compose(diff.inverse())).rotateVector(ray), 0)
+
+
+      // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
+      // or Instant Placement Point.
+      val firstHitResult =
+        hitResultList.firstOrNull { hit ->
+          when (val trackable = hit.trackable!!) {
+            is Plane ->
+              trackable.isPoseInPolygon(hit.hitPose) &&
+                      PlaneRenderer.calculateDistanceToPlane(hit.hitPose, req.origin.pose) > 0
+            is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
+            is InstantPlacementPoint -> true
+            // DepthPoints are only returned if Config.DepthMode is set to AUTOMATIC.
+            is DepthPoint -> true
+            else -> false
+          }
         }
+
+      req.origin.detach()
+
+      req.ret?.success(null)
+
+      if (firstHitResult != null) {
+        // Cap the number of objects created. This avoids overloading both the
+        // rendering system and ARCore.
+        if (wrappedAnchors.size >= 20) {
+          wrappedAnchors[0].anchor.detach()
+          wrappedAnchors.removeAt(0)
+        }
+
+        // Adding an Anchor tells ARCore that it should track this position in
+        // space. This anchor is created on the Plane to place the 3D model
+        // in the correct position relative both to the world and to the plane.
+
+        wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
       }
-
-
-    if (firstHitResult != null) {
-      // Cap the number of objects created. This avoids overloading both the
-      // rendering system and ARCore.
-      if (wrappedAnchors.size >= 20) {
-        wrappedAnchors[0].anchor.detach()
-        wrappedAnchors.removeAt(0)
-      }
-
-      // Adding an Anchor tells ARCore that it should track this position in
-      // space. This anchor is created on the Plane to place the 3D model
-      // in the correct position relative both to the world and to the plane.
-
-      wrappedAnchors.add(WrappedAnchor(firstHitResult.createAnchor(), firstHitResult.trackable))
     }
-
-  }
-
-  // Handle only one tap per frame, as taps are usually low frequency compared to frame rate.
-  private fun handleTap(frame: Frame, camera: Camera) {
-    if (camera.trackingState != TrackingState.TRACKING) return
-    /*
-    val tap = activity.view.tapHelper.poll() ?: return
-
-    activity.runOnUiThread { activity.view.showOcclusionDialogIfNeeded() }
-
-
-    val pjM = FloatArray(16)
-    camera.getProjectionMatrix(pjM, 0, Z_NEAR, Z_FAR)
-
-    val vM = FloatArray(16)
-    camera.getViewMatrix(vM, 0 )
-
-    val anchor = session!!.createAnchor(camera.pose)
-
-    val height = activity.view.surfaceView.height
-    val width = activity.view.surfaceView.width
-
-   // wrappedAnchors.add(WrappedAnchor(anchor, null))
-
-    scope.launch {
-      delay(2000L)
-
-      val ray = createRay(tap ,projectionMatrix, viewMatrix, height, width)
-
-      val inv = anchor.pose.inverse()
-
-      request = MarkRequest(anchor, inv.rotateVector(ray))
-    }
-
-     */
   }
 
   private fun showError(errorMessage: String)  {
@@ -601,9 +607,9 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
    */
 
 
-  private fun createRay(px: MotionEvent, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
-    val start = unproject(px, 0f, view, projection, height, width)
-    val end = unproject(px,1f, view, projection, height, width)
+  private fun createRay(x: Float, y: Float, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
+    val start = unproject(x,y, 0f, view, projection, height, width)
+    val end = unproject(x,y, 1f, view, projection, height, width)
 
     return arrayOf(
       end[0] - start[0],
@@ -612,16 +618,16 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     ).toFloatArray()
   }
 
-  private fun unproject(px: MotionEvent, z: Float,  viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
+  private fun unproject(x: Float, y: Float, z: Float,  viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
     val m = FloatArray(16)
     Matrix.multiplyMM(m, 0,projectionMatrix,0, viewMatrix,0)
     Matrix.invertM(m,0,m,0)
 
-    val y = height - px.y
+    val yn = height - y
 
     val vec = arrayOf(
-      px.x / width * 2f - 1f,
-      y / height * 2f - 1f,
+      x / width * 2f - 1f,
+      yn / height * 2f - 1f,
       2f * z - 1f,
       1f
     ).toFloatArray()
@@ -632,42 +638,6 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     val w = 1f / res[3]
 
     return res.map { it * w }.subList(0,3).toFloatArray()
-  }
-
-  private fun hamilton(q1: FloatArray, q2: FloatArray) : FloatArray {
-    val q1x = q1[0]
-    val q1y = q1[1]
-    val q1z = q1[2]
-    val q1w = q1[3]
-
-    // Components of the second quaternion.
-    val q2x = q2[0]
-    val q2y = q2[1]
-    val q2z = q2[2]
-    val q2w = q2[3]
-
-    // Components of the product.
-    val x = q1w * q2x + q1x * q2w + q1y * q2z - q1z * q2y
-    val y = q1w * q2y - q1x * q2z + q1y * q2w + q1z * q2x
-    val z = q1w * q2z + q1x * q2y - q1y * q2x + q1z * q2w
-    val w = q1w * q2w - q1x * q2x - q1y * q2y - q1z * q2z
-
-    return arrayOf(x,y,z,w).toFloatArray()
-  }
-
-  private fun quaternionInverse(q: FloatArray) : FloatArray {
-    val squareNorm = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]
-
-    return arrayOf(
-      -q[0] / squareNorm,
-      -q[1] / squareNorm,
-      -q[2] / squareNorm,
-      q[3] / squareNorm)
-      .toFloatArray()
-  }
-
-  private fun quaternionNegate(q: FloatArray) : FloatArray {
-    return arrayOf(-q[0], -q[1], -q[2], q[3]).toFloatArray()
   }
 }
 
@@ -680,26 +650,18 @@ private data class WrappedAnchor(
   val trackable: Trackable?,
 )
 
-private data class MarkRequest (
-  val anchor: Anchor,
-  val ray: FloatArray,
-) {
-  override fun equals(other: Any?): Boolean {
-    if (this === other) return true
-    if (javaClass != other?.javaClass) return false
+public data class MarkStore (
+  val viewMatrix: FloatArray,
+  val projMatrix: FloatArray,
+  val origin: Anchor,
+  var ret: MethodChannel.Result?,
+  var x: Float?,
+  var y: Float?,
+  val height: Int,
+  val width: Int,
+)
 
-    other as MarkRequest
-
-    if (anchor != other.anchor) return false
-    if (!ray.contentEquals(other.ray)) return false
-
-    return true
-  }
-
-  override fun hashCode(): Int {
-    var result = anchor.hashCode()
-    result = 31 * result + ray.contentHashCode()
-    return result
-  }
-
-}
+public data class MarkRequest (
+  val x: Float,
+  val y: Float,
+)

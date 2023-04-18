@@ -81,7 +81,6 @@ class SceneViewWrapper(
         _channel.setMethodCallHandler(this)
         setupLifeCycle()
 
-        holder.view = renderer;
         //onPause()
 
     }
@@ -92,7 +91,6 @@ class SceneViewWrapper(
 
     override fun dispose() {
         activity.application.unregisterActivityLifecycleCallbacks(this.activityLifecycleCallbacks)
-        holder.view = null
         //_mainScope.cancel()
         try {
             onPause()
@@ -127,33 +125,6 @@ class SceneViewWrapper(
             }
         )
     }
-
-/*
-    private suspend fun showModel() {
-        val hdrFile = "environments/studio_small_09_2k.hdr"
-        sceneView.loadHdrIndirectLight(hdrFile, specularFilter = true) {
-            intensity(30_000f)
-        }
-        sceneView.loadHdrSkybox(hdrFile) {
-            intensity(50_000f)
-        }
-
-        val model = sceneView.modelLoader.loadModel("models/MaterialSuite.glb")!!
-        val modelNode = ModelNode(sceneView, model).apply {
-            transform(
-                position = Position(z = -4.0f),
-                rotation = Rotation(x = 15.0f)
-            )
-            scaleToUnitsCube(2.0f)
-            // TODO: Fix centerOrigin
-            //     centerOrigin(Position(x=-1.0f, y=-1.0f))
-            playAnimation()
-        }
-        sceneView.addChildNode(modelNode)
-        Log.d("Done", "Done")
-    }
-
- */
 
     private fun setupLifeCycle() {
         activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
@@ -192,25 +163,21 @@ class SceneViewWrapper(
     }
 
     private fun onResume() {
+        view.onResume()
         arCoreSessionHelper.onResume()
         renderer.onResume()
 
     }
 
     private  fun onPause() {
-        arCoreSessionHelper.onPause()
+        view.onPause()
         renderer.onPause()
-
+        arCoreSessionHelper.onPause()
     }
 
     private fun onDestroy() {
         arCoreSessionHelper.onDestroy()
-
-
     }
-
-    private var markRequest: MarkRequest? = null;
-    var markRequested: Boolean = false;
 
     /**
      * Handles the specified method call received from Flutter.
@@ -241,119 +208,26 @@ class SceneViewWrapper(
             result.success(null)
             return
         }
-        /*
+
         if (call.method == "markRequest") {
-            activity.runOnUiThread {
-                val frame = sceneView.arFrame ?: return@runOnUiThread
-
-
-
-                val viewM = FloatArray(16)
-                val projM = FloatArray(16)
-
-                frame.camera.getViewMatrix(viewM, 0)
-                frame.camera.getProjectionMatrix(projM, 0, 0.1f, 100f)
-
-                val anchor = sceneView.session!!.createAnchor(frame.camera.pose)
-
-                val fr = holder.lastFrame!!
-
-                markRequest = MarkRequest(sceneView.width, sceneView.height, viewM, projM,
-                    anchor,
-                    fr.copy(fr.config, false))
-
-                val size: Int = fr.rowBytes * fr.height
-                val byteBuffer = ByteBuffer.allocate(size)
-                fr.copyPixelsToBuffer(byteBuffer)
-                val byteArray = byteBuffer.array()
-
-                result.success(byteArray)
+            synchronized(renderer.requestMutex) {
+                renderer.request = result
             }
-
             return
         }
 
-         */
-        /*
         else if (call.method == "markNow") {
-            var m = markRequest ?: return
-            val x: Float = call.argument("x")
-            val y: Float = call.argument("y")
-
-            val ray =  createRay(x, y, m.projM, m.viewM, m.height, m.width)
-
-            activity.runOnUiThread {
-                val frame = sceneView.arFrame ?: return@runOnUiThread
-
-                val diff = m.anchor.pose.compose(frame.camera.pose.inverse())
-                val vec = diff.rotateVector(ray)
-
-                val hitResultList = frame.hitTest(m.anchor.pose.translation, 0, vec, 0)
-
-                m.anchor.detach()
-
-                val firstHitResult =
-                    hitResultList.firstOrNull { hit ->
-                        when (val trackable = hit.trackable!!) {
-                            is Plane ->
-                                trackable.isPoseInPolygon(hit.hitPose) &&
-                                        calculateDistanceToPlane(hit.hitPose, m.anchor.pose) > 0
-                            is Point -> trackable.orientationMode == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL
-                            is InstantPlacementPoint -> true
-                            else -> false
-                        }
-                    }
+            val x: Double = call.argument("x")!!
+            val y: Double = call.argument("y")!!
+            synchronized(renderer.markMutex) {
+                renderer.markRequest?.x = x.toFloat()
+                renderer.markRequest?.y = y.toFloat()
+                renderer.markRequest?.ret = result
             }
-
-
+            return
         }
 
-         */
         result.notImplemented()
-    }
-
-    fun calculateDistanceToPlane(planePose: Pose, cameraPose: Pose): Float {
-        val normal = FloatArray(3)
-        val cameraX = cameraPose.tx()
-        val cameraY = cameraPose.ty()
-        val cameraZ = cameraPose.tz()
-        // Get transformed Y axis of plane's coordinate system.
-        planePose.getTransformedAxis(1, 1.0f, normal, 0)
-        // Compute dot product of plane's normal with vector from camera to plane center.
-        return (cameraX - planePose.tx()) * normal[0] + (cameraY - planePose.ty()) * normal[1] + (cameraZ - planePose.tz()) * normal[2]
-    }
-
-    private fun createRay(x: Float, y: Float, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
-        val start = unproject(x, y,0f, view, projection, height, width)
-        val end = unproject(x, y,1f, view, projection, height, width)
-
-        return arrayOf(
-            end[0] - start[0],
-            end[1] - start[1],
-            end[2] - start[2]
-        ).toFloatArray()
-    }
-
-    private fun unproject(x: Float, y: Float, z: Float, viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
-        val m = FloatArray(16)
-        Matrix.multiplyMM(m, 0,projectionMatrix,0, viewMatrix,0)
-        Matrix.invertM(m,0,m,0)
-
-        val yc = height - y
-
-        val vec = arrayOf(
-            x / width * 2f - 1f,
-            yc / height * 2f - 1f,
-            2f * z - 1f,
-            1f
-        ).toFloatArray()
-        val res = FloatArray(4)
-
-        Matrix.multiplyMV(res,0, m,0,vec,0)
-
-        val w = 1f / res[3]
-
-        return res.map { it * w }.subList(0,3).toFloatArray()
     }
 }
 

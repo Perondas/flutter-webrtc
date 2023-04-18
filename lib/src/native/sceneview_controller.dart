@@ -17,16 +17,16 @@ class SceneViewController {
     _channel?.invokeMethod("showDemo");
   }
 
-  Future<Uint8List?> markRequest() {
+  Future markRequest() {
     if (!isRegistered) return Future.value(null);
 
-    return _channel!.invokeMethod<Uint8List>("markRequest");
+    return _channel!.invokeMethod("markRequest");
   }
 
-  void markResponse(int x, int y) {
+  void markResponse(double x, double y) {
     if (!isRegistered) return;
 
-    _channel?.invokeMethod("markResponse", {"x": x, "y": y});
+    _channel?.invokeMethod("markNow", {"x": x, "y": y});
   }
 
   // Add new methods here and call the method channel to execute them native side

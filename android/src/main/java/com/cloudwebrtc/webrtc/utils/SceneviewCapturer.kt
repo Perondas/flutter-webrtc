@@ -12,8 +12,10 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.cloudwebrtc.webrtc.ViewHolder
 import org.webrtc.*
+import samplerenderer.GLError
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import java.nio.IntBuffer
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -43,21 +45,31 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
         val yuvConverter = YuvConverter()
 
         var frameAvailable = false
+        var buf: ByteBuffer? = null
 
-        synchronized(holder.needsNewFrame) {
+        synchronized(holder.lock) {
             if (holder.height == null) return
             if (holder.width == null) return
 
             if (holder.needsNewFrame) return
 
             if (holder.byteBuffer == null) return
+            buf = holder.byteBuffer!!
+            holder.byteBuffer = null
 
             frameAvailable = true
+
+            holder.needsNewFrame = false
+        }
+
+        if (!frameAvailable) {
+            return
         }
 
         val frameWidth = holder.width!!
         val frameHeight = holder.height!!
-        val byteBuffer = holder.byteBuffer!!
+        val byteBuffer = buf!!
+        holder.byteBuffer = null
 
         surfaceTextureHelper!!.handler.post {
             val idArr = IntArray(1)
@@ -81,7 +93,6 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, frameWidth, frameHeight, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, byteBuffer)
             GlUtil.checkNoGLES2Error("glTexImage2D")
 
-            holder.byteBuffer = null
             JniCommon.nativeFreeByteBuffer(byteBuffer)
 
             val m = Matrix()
@@ -99,11 +110,10 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
             capturerObserver!!.onFrameCaptured(videoFrame)
             videoFrame.release()
 
-            synchronized(holder.needsNewFrame) {
+            synchronized(holder.lock) {
                 holder.needsNewFrame = true
             }
         }
-
     }
 
     override fun initialize(
