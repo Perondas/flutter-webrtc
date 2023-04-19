@@ -88,6 +88,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
   static public final String TAG = "FlutterWebRTCPlugin";
 
   private final Map<String, PeerConnectionObserver> mPeerConnectionObservers = new HashMap<>();
+  private final ViewHolder holder;
   private BinaryMessenger messenger;
   private Context context;
   private final TextureRegistry textures;
@@ -109,10 +110,11 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
 
   private Activity activity;
 
-  MethodCallHandlerImpl(Context context, BinaryMessenger messenger, TextureRegistry textureRegistry) {
+  MethodCallHandlerImpl(Context context, BinaryMessenger messenger, TextureRegistry textureRegistry, ViewHolder holder) {
     this.context = context;
     this.textures = textureRegistry;
     this.messenger = messenger;
+    this.holder = holder;
   }
 
   static private void resultError(String method, String error, Result result) {
@@ -1189,7 +1191,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       return;
     }
 
-    getUserMediaImpl.getUserMedia(constraints, result, mediaStream);
+    getUserMediaImpl.getUserMedia(constraints, result, mediaStream, this.holder);
   }
 
   public void getDisplayMedia(ConstraintsMap constraints, Result result) {
