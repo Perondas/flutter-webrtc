@@ -1,7 +1,54 @@
 # Changelog
 
 --------------------------------------------
+[0.9.26] - 2023-04-16
+
+* [iOS/macOS] motify h264 profile-level-id to support high resolution.
+* [Dawrin/Android/Windows] feat: add RTCDegradationPreference to RTCRtpParameters.
+
+[0.9.25] - 2023-04-10
+
+* [Dawrin/Android/Windows] Add  `addStreams` to `RTCRtpSender`
+* [Android] fix: label for Wired Headset. (#1305)
+* [Dawrin/Android/Windows] Feat/media stream track get settings (#1294)
+* [Android/iOS] Fix track lookup in the platform specific code for Android and iOS (#1289)
+* [iOS] fix: ICE Connectivity doesn't establish with DualSIM iPhones.
+* [Android] Switch to webrtc hosted on maven central (#1288)
+
+[0.9.24] - 2023-03-07
+
+* [iOS] avaudiosession mode changed to AVAudioSessionModeVideoChat (#1285)
+* [macOS] fix memory leak for screen capture.
+
+[0.9.23] - 2023-02-17
+
+* [Windows/Linux] Updated libwebrtc binary for windows/linux to fix two crashes.
+
+[0.9.22] - 2023-02-14
+
+* [iOS] fix: Without any setActive for rtc session, libwebrtc manages the session counter by itself. (#1266)
+* [dart] fix: remove rtpsender.dispose.
+* [web] fix video renderer issue for safari.
+* [macOS] Fixed macOS desktop capture crash with simulcast enabled.
+* [macOS] Fix the crash when setting the fps of the virtual camera.
+
+[0.9.21] - 2023-02-10
+
+* [Web] Fix: RTCRtpParameters.fromJsObject for Firefox.
+* [Web] Add bufferedamountlow.
+* [Android] Fixed frame capturer returning images with wrong colors (#1258).
+* [Windows] bug fix.
+
+[0.9.20] - 2023-02-03
+
+* [Dawrin/Android/Windows] Add getCapabilities/setCodecPreferences methods
+* [Darwin] buffered amount
+* [Linux] Fixed audio device name buffer size
+* [Android] Start audioswitch and only activate it when needed
+* [Darwin] Fix typo which broke GcmCryptoSuites
+
 [0.9.19] - 2023-01-10
+
 * [Dart] Fix getStats: change 'track' to 'trackId' (#1199)
 * [Android] keep the audio switch after stopping (#1202)
 * [Dart] Enhance RTC video view with placeholder builder property (#1206)

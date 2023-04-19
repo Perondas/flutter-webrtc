@@ -19,7 +19,7 @@ class RTCRtpSenderNative extends RTCRtpSender {
     return RTCRtpSenderNative(
         map['senderId'],
         (trackMap.isNotEmpty)
-            ? MediaStreamTrackNative.fromMap(map['track'])
+            ? MediaStreamTrackNative.fromMap(map['track'], peerConnectionId)
             : null,
         RTCDTMFSenderNative(peerConnectionId, map['senderId']),
         RTCRtpParameters.fromMap(map['rtpParameters']),
@@ -38,6 +38,7 @@ class RTCRtpSenderNative extends RTCRtpSender {
   String _peerConnectionId;
   String _id;
   MediaStreamTrack? _track;
+  final Set<MediaStream> _streams = {};
   RTCDTMFSender _dtmf;
   RTCRtpParameters _parameters;
   bool _ownsTrack = false;
@@ -113,6 +114,22 @@ class RTCRtpSenderNative extends RTCRtpSender {
     }
   }
 
+  @override
+  Future<void> setStreams(List<MediaStream> streams) async {
+    try {
+      await WebRTC.invokeMethod('rtpSenderSetStreams', <String, dynamic>{
+        'peerConnectionId': _peerConnectionId,
+        'rtpSenderId': _id,
+        'streamIds': streams.map<String>((e) => e.id).toList(),
+      });
+
+      // change reference of associated MediaTrack
+      _streams.addAll(streams);
+    } on PlatformException catch (e) {
+      throw 'Unable to RTCRtpSender::setTrack: ${e.message}';
+    }
+  }
+
   void removeTrackReference() {
     _track = null;
   }
@@ -132,16 +149,9 @@ class RTCRtpSenderNative extends RTCRtpSender {
   @override
   RTCDTMFSender get dtmfSender => _dtmf;
 
+  @Deprecated(
+      'No need to dispose rtpSender as it is handled by peerConnection.')
   @override
   @mustCallSuper
-  Future<void> dispose() async {
-    try {
-      await WebRTC.invokeMethod('rtpSenderDispose', <String, dynamic>{
-        'peerConnectionId': _peerConnectionId,
-        'rtpSenderId': _id,
-      });
-    } on PlatformException catch (e) {
-      throw 'Unable to RTCRtpSender::dispose: ${e.message}';
-    }
-  }
+  Future<void> dispose() async {}
 }
