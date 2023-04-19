@@ -15,25 +15,30 @@
  */
 package samplerenderer
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.opengl.GLES30
 import android.opengl.Matrix
+import android.os.Build
 import android.util.Log
-import android.view.MotionEvent
+import androidx.annotation.RequiresApi
 import com.cloudwebrtc.webrtc.SceneViewWrapper
 import com.cloudwebrtc.webrtc.ViewHolder
 import com.google.ar.core.*
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.NotYetAvailableException
+import io.flutter.plugin.common.MethodChannel
 import org.webrtc.JniCommon
 import samplerenderer.arcore.BackgroundRenderer
 import samplerenderer.arcore.PlaneRenderer
 import samplerenderer.arcore.SpecularCubemapFilter
 import samplerenderer.helpers.DisplayRotationHelper
 import samplerenderer.helpers.TrackingStateHelper
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
-import io.flutter.plugin.common.MethodChannel
+import kotlin.concurrent.thread
 
 
 /** Renders the HelloAR application using our example Renderer. */
@@ -314,8 +319,6 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       }
     }
 
-    handleRequest(frame, camera)
-
     // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
     trackingStateHelper.updateKeepScreenOnFlag(camera.trackingState)
 
@@ -449,6 +452,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
       GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBORead[0]);
 
+      handleRequest(frame, camera, byteBuffer)
+
       synchronized(holder.lock) {
         if (holder.byteBuffer != null) {
           JniCommon.nativeFreeByteBuffer(holder.byteBuffer)
@@ -524,10 +529,11 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     )
   }
 
-  private fun handleRequest(frame: Frame, camera: Camera) {
+  @RequiresApi(Build.VERSION_CODES.O)
+  private fun handleRequest(frame: Frame, camera: Camera, byteBuffer: ByteBuffer) {
     if (camera.trackingState != TrackingState.TRACKING) return
     synchronized(requestMutex) {
-      val req = request ?: return
+      val req = request ?: return@synchronized
       request = null
 
 
@@ -546,7 +552,27 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
         markRequest = MarkStore(vM, pjM, anchor, null, null, null, activity.view.height, activity.view.width)
       }
 
-      req.success(null)
+      val img = IntArray(byteBuffer.asIntBuffer().capacity() + 1 )
+      byteBuffer.asIntBuffer().get(img, 1, byteBuffer.asIntBuffer().capacity())
+
+      byteBuffer.rewind()
+
+      thread {
+
+        val bmp = Bitmap.createBitmap(img, holder.width!!,holder.height!!, Bitmap.Config.ARGB_8888)
+
+        if (bmp == null) {
+          req.error("Fail", null, null)
+          return@thread
+        }
+
+        val stream = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+        val byteArray = stream.toByteArray()
+        bmp.recycle()
+
+        req.success(byteArray)
+      }
     }
 
     synchronized(markMutex) {
@@ -554,11 +580,11 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       if (req.x == null || req.y == null) return
       markRequest = null
 
-      val diff = (req.origin.pose.inverse().compose(camera.pose))
+      val diff = req.origin.pose.compose(camera.pose.inverse())
 
       val ray = createRay(req.x!!, req.y!!, req.projMatrix, req.viewMatrix, req.height, req.width)
 
-      val hitResultList = frame.hitTest(req.origin.pose.translation, 0, camera.pose.compose(diff.inverse().compose(diff.inverse())).rotateVector(ray), 0)
+      val hitResultList = frame.hitTest(req.origin.pose.translation, 0, diff.rotateVector(ray), 0)
 
 
       // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,

@@ -17,10 +17,10 @@ class SceneViewController {
     _channel?.invokeMethod("showDemo");
   }
 
-  Future markRequest() {
+  Future<Uint8List?> markRequest() {
     if (!isRegistered) return Future.value(null);
 
-    return _channel!.invokeMethod("markRequest");
+    return _channel!.invokeMethod<Uint8List>("markRequest");
   }
 
   void markResponse(double x, double y) {

@@ -590,7 +590,7 @@ class GetUserMediaImpl {
             MediaStream mediaStream,
             List<String> grantedPermissions,
             ViewHolder holder) {
-        MediaStreamTrack[] tracks = new MediaStreamTrack[2];
+        ConstraintsMap[] trackParams = new ConstraintsMap[2];
 
         // If we fail to create either, destroy the other one and fail.
         if ((grantedPermissions.contains(PERMISSION_AUDIO)
