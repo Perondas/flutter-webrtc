@@ -417,8 +417,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
     var needsNew = false
     synchronized(holder.lock) {
-      holder.height = activity.view.height
-      holder.width = activity.view.width
+      holder.height = activity.view.height / 2
+      holder.width = activity.view.width / 2
       needsNew = holder.needsNewFrame
 
       if (holder.byteBuffer != null && holder.needsNewFrame) {
@@ -428,11 +428,22 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     }
 
     if (needsNew) {
-      val currentFBORead = IntBuffer.allocate(1)
-      val currentFBOWrite = IntBuffer.allocate(1)
+      var tempBuf = Framebuffer(render, holder.width!!, holder.height!!)
 
-      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBOWrite[0]);
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, virtualSceneFramebuffer!!.framebufferId)
       GLError.maybeThrowGLException("", "glBindFramebuffer")
+
+      GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, tempBuf.framebufferId)
+      GLError.maybeThrowGLException("", "glBindFramebuffer")
+
+      GLES30.glBlitFramebuffer(0,0,activity.view.width, activity.view.height, 0,0,  holder.width!!, holder.height!!, GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST)
+      GLError.maybeThrowGLException("", "glBlitFramebuffer")
+
+      GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, tempBuf.framebufferId)
+      GLError.maybeThrowGLException("", "glBindFramebuffer")
+
+      GLES30.glViewport(0, 0, holder.width!!, holder.height!!)
+      GLError.maybeThrowGLException("", "glViewport")
 
       val byteBuffer = JniCommon.nativeAllocateByteBuffer(
         holder.height!! *
@@ -449,8 +460,6 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
         byteBuffer
       )
       GLError.maybeThrowGLException("", "glReadPixels")
-
-      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, currentFBORead[0]);
 
       handleRequest(frame, camera, byteBuffer)
 
@@ -545,11 +554,11 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
       val anchor = session!!.createAnchor(camera.pose)
 
-      val height = activity.view.height
-      val width = activity.view.width
+      val height = holder.height!!
+      val width = holder.width!!
 
       synchronized(markMutex) {
-        markRequest = MarkStore(vM, pjM, anchor, null, null, null, activity.view.height, activity.view.width)
+        markRequest = MarkStore(vM, pjM, anchor, null, null, null,holder.height!!, holder.width!!)
       }
 
       val img = IntArray(byteBuffer.asIntBuffer().capacity() + 1 )
