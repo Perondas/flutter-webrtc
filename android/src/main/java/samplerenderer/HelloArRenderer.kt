@@ -353,7 +353,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
     // If not tracking, don't draw 3D objects.
     if (camera.trackingState == TrackingState.PAUSED) {
-      return
+      //return
     }
 
     // -- Draw non-occluded virtual objects (planes, point cloud)
@@ -417,8 +417,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
     var needsNew = false
     synchronized(holder.lock) {
-      holder.height = activity.view.height / 2
-      holder.width = activity.view.width / 2
+      holder.height = activity.view.height / 4
+      holder.width = activity.view.width / 4
       needsNew = holder.needsNewFrame
 
       if (holder.byteBuffer != null && holder.needsNewFrame) {
@@ -430,8 +430,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     if (needsNew) {
       var tempBuf = Framebuffer(render, holder.width!!, holder.height!!)
 
-      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, virtualSceneFramebuffer!!.framebufferId)
-      GLError.maybeThrowGLException("", "glBindFramebuffer")
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
 
       GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, tempBuf.framebufferId)
       GLError.maybeThrowGLException("", "glBindFramebuffer")
@@ -439,11 +438,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       GLES30.glBlitFramebuffer(0,0,activity.view.width, activity.view.height, 0,0,  holder.width!!, holder.height!!, GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST)
       GLError.maybeThrowGLException("", "glBlitFramebuffer")
 
-      GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, tempBuf.framebufferId)
-      GLError.maybeThrowGLException("", "glBindFramebuffer")
-
-      GLES30.glViewport(0, 0, holder.width!!, holder.height!!)
-      GLError.maybeThrowGLException("", "glViewport")
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, tempBuf.framebufferId);
 
       val byteBuffer = JniCommon.nativeAllocateByteBuffer(
         holder.height!! *
@@ -462,6 +457,10 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       GLError.maybeThrowGLException("", "glReadPixels")
 
       handleRequest(frame, camera, byteBuffer)
+
+      tempBuf.close()
+
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
 
       synchronized(holder.lock) {
         if (holder.byteBuffer != null) {
