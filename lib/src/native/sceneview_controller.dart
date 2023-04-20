@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 
 class SceneViewController {
@@ -17,10 +15,10 @@ class SceneViewController {
     _channel?.invokeMethod("showDemo");
   }
 
-  Future<Uint8List?> markRequest() {
+  Future<Map?> markRequest() {
     if (!isRegistered) return Future.value(null);
 
-    return _channel!.invokeMethod<Uint8List>("markRequest");
+    return _channel!.invokeMethod<Map>("markRequest");
   }
 
   void markResponse(double x, double y) {

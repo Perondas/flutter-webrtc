@@ -417,8 +417,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
     var needsNew = false
     synchronized(holder.lock) {
-      holder.height = activity.view.height / 4
-      holder.width = activity.view.width / 4
+      holder.height = activity.view.height / 3
+      holder.width = activity.view.width / 3
       needsNew = holder.needsNewFrame
 
       if (holder.byteBuffer != null && holder.needsNewFrame) {
@@ -560,27 +560,18 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
         markRequest = MarkStore(vM, pjM, anchor, null, null, null,holder.height!!, holder.width!!)
       }
 
-      val img = IntArray(byteBuffer.asIntBuffer().capacity() + 1 )
-      byteBuffer.asIntBuffer().get(img, 1, byteBuffer.asIntBuffer().capacity())
+      val img = ByteArray(byteBuffer.capacity())
+      byteBuffer.get(img, 0, byteBuffer.capacity())
 
       byteBuffer.rewind()
 
-      thread {
+      var map = HashMap<String, Any>()
 
-        val bmp = Bitmap.createBitmap(img, holder.width!!,holder.height!!, Bitmap.Config.ARGB_8888)
+      map["img"] = img
+      map["height"] = holder.height!!
+      map["width"] = holder.width!!
 
-        if (bmp == null) {
-          req.error("Fail", null, null)
-          return@thread
-        }
-
-        val stream = ByteArrayOutputStream()
-        bmp.compress(Bitmap.CompressFormat.JPEG, 100, stream)
-        val byteArray = stream.toByteArray()
-        bmp.recycle()
-
-        req.success(byteArray)
-      }
+      req.success(map)
     }
 
     synchronized(markMutex) {
