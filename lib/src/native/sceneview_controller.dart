@@ -9,10 +9,10 @@ class SceneViewController {
     _channel = MethodChannel('scene_view_$id');
   }
 
-  void displayDemo() {
+  void init() {
     if (!isRegistered) return;
 
-    _channel?.invokeMethod("showDemo");
+    _channel?.invokeMethod("init");
   }
 
   Future<Map?> markRequest() {
@@ -25,6 +25,12 @@ class SceneViewController {
     if (!isRegistered) return;
 
     _channel?.invokeMethod("markNow", {"x": x, "y": y});
+  }
+
+  void removeMark() {
+    if (!isRegistered) return;
+
+    _channel?.invokeMethod("removeMark");
   }
 
   // Add new methods here and call the method channel to execute them native side

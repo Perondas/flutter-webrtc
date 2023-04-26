@@ -557,7 +557,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       val width = holder.width!!
 
       synchronized(markMutex) {
-        markRequest = MarkStore(vM, pjM, anchor, null, null, null,holder.height!!, holder.width!!)
+        markRequest = MarkStore(vM, pjM, anchor, null, null, null, holder.height!!, holder.width!!)
       }
 
       val img = ByteArray(byteBuffer.capacity())
@@ -579,12 +579,9 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       if (req.x == null || req.y == null) return
       markRequest = null
 
-      val diff = req.origin.pose.compose(camera.pose.inverse())
-
       val ray = createRay(req.x!!, req.y!!, req.projMatrix, req.viewMatrix, req.height, req.width)
 
-      val hitResultList = frame.hitTest(req.origin.pose.translation, 0, diff.rotateVector(ray), 0)
-
+      val hitResultList = frame.hitTest(req.origin.pose.translation, 0, ray, 0)
 
       // Hits are sorted by depth. Consider only closest hit on a plane, Oriented Point, Depth Point,
       // or Instant Placement Point.
@@ -646,7 +643,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
   private fun unproject(x: Float, y: Float, z: Float,  viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
     val m = FloatArray(16)
     Matrix.multiplyMM(m, 0,projectionMatrix,0, viewMatrix,0)
-    Matrix.invertM(m,0,m,0)
+    val mInv = FloatArray(16)
+    Matrix.invertM(mInv,0,m,0)
 
     val yn = height - y
 
@@ -658,11 +656,16 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     ).toFloatArray()
     var res = FloatArray(4)
 
-    Matrix.multiplyMV(res,0, m,0,vec,0)
+    Matrix.multiplyMV(res,0, mInv,0,vec,0)
 
     val w = 1f / res[3]
 
     return res.map { it * w }.subList(0,3).toFloatArray()
+  }
+
+  fun removeMarker() {
+    wrappedAnchors.forEach { it.anchor.detach() }
+    wrappedAnchors.clear()
   }
 }
 

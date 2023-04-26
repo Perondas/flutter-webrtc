@@ -203,7 +203,7 @@ class SceneViewWrapper(
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         // Methods called from the method channel in sceneview_controller.dart will end up here
         // Simply interact wiht your sceneView instance from here
-        if (call.method == "showDemo") {
+        if (call.method == "init") {
             onResume()
             result.success(null)
             return
@@ -224,6 +224,12 @@ class SceneViewWrapper(
                 renderer.markRequest?.y = y.toFloat()
                 renderer.markRequest?.ret = result
             }
+            return
+        }
+
+        else if (call.method == "removeMark") {
+            renderer.removeMarker()
+            result.success(null)
             return
         }
 

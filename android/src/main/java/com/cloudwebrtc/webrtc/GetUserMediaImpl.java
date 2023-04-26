@@ -710,17 +710,28 @@ class GetUserMediaImpl {
 
         String facingMode = getFacingMode(videoConstraintsMap);
         isFacing = facingMode == null || !facingMode.equals("environment");
-        String deviceId = getSourceIdConstraint(videoConstraintsMap);
+        boolean isAr = facingMode != null && facingMode.equals("ar");
 
         VideoCapturer videoCapturer;
+        String deviceId = getSourceIdConstraint(videoConstraintsMap);
 
+        if (isAr) {
             if (VERSION.SDK_INT >= VERSION_CODES.N) {
                 videoCapturer = new SceneviewCapturer(holder);
             }
             else {
-                throw new RuntimeException();
+                return null;
+            }
+        } else {
+            
+            Map<String, VideoCapturer> result = createVideoCapturer(cameraEnumerator, isFacing, deviceId);
+
+            if(deviceId == null) {
+                deviceId = result.keySet().iterator().next();
             }
 
+            videoCapturer = result.get(deviceId);
+        }
 
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         VideoSource videoSource = pcFactory.createVideoSource(false);
