@@ -630,37 +630,32 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
 
   private fun createRay(x: Float, y: Float, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
-    val start = unproject(x,y, 0f, view, projection, height, width)
-    val end = unproject(x,y, 1f, view, projection, height, width)
+    val xNorm = (2f * x) / width - 1f
+    val yNorm = 1f - (2f * y) / height
 
-    return arrayOf(
-      end[0] - start[0],
-      end[1] - start[1],
-      end[2] - start[2]
-    ).toFloatArray()
-  }
+    val rayClip = arrayOf(xNorm, yNorm, -1f, 1f).toFloatArray()
 
-  private fun unproject(x: Float, y: Float, z: Float,  viewMatrix: FloatArray, projectionMatrix: FloatArray, height: Int, width: Int) : FloatArray {
-    val m = FloatArray(16)
-    Matrix.multiplyMM(m, 0,projectionMatrix,0, viewMatrix,0)
-    val mInv = FloatArray(16)
-    Matrix.invertM(mInv,0,m,0)
+    val invProj = FloatArray(16)
+    Matrix.invertM(invProj, 0, projection, 0)
 
-    val yn = height - y
+    val rayEye = FloatArray(4)
+    Matrix.multiplyMV(rayEye, 0, invProj, 0, rayClip, 0)
 
-    val vec = arrayOf(
-      x / width * 2f - 1f,
-      yn / height * 2f - 1f,
-      2f * z - 1f,
-      1f
-    ).toFloatArray()
-    var res = FloatArray(4)
+    rayEye[2] = -1f
+    rayEye[3] = 0f
 
-    Matrix.multiplyMV(res,0, mInv,0,vec,0)
+    val invView = FloatArray(16)
+    Matrix.invertM(invView, 0, view, 0)
 
-    val w = 1f / res[3]
+    val rayWorld = FloatArray(4)
+    Matrix.multiplyMV(rayWorld, 0, invView, 0, rayEye, 0)
 
-    return res.map { it * w }.subList(0,3).toFloatArray()
+    // Normalise
+    val len = rayWorld.map { it * it }.subList(0,3).fold(0f) { acc: Float, i: Float ->
+      acc + i
+    }
+
+    return rayWorld.map { it /len }.subList(0,3).toFloatArray()
   }
 
   fun removeMarker() {
