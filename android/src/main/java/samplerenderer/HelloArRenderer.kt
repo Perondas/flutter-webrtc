@@ -630,11 +630,14 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
 
 
   private fun createRay(x: Float, y: Float, projection: FloatArray, view: FloatArray, height: Int, width: Int) : FloatArray {
+    // Normalised Device Coordinates
     val xNorm = (2f * x) / width - 1f
     val yNorm = 1f - (2f * y) / height
 
+    // Homogeneous Clip Coordinates
     val rayClip = arrayOf(xNorm, yNorm, -1f, 1f).toFloatArray()
 
+    // 4d Eye (Camera) Coordinates
     val invProj = FloatArray(16)
     Matrix.invertM(invProj, 0, projection, 0)
 
@@ -644,6 +647,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     rayEye[2] = -1f
     rayEye[3] = 0f
 
+    // 4d World Coordinates
     val invView = FloatArray(16)
     Matrix.invertM(invView, 0, view, 0)
 
@@ -651,11 +655,12 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     Matrix.multiplyMV(rayWorld, 0, invView, 0, rayEye, 0)
 
     // Normalise
-    val len = rayWorld.map { it * it }.subList(0,3).fold(0f) { acc: Float, i: Float ->
+    val len = rayWorld.map { it * it }
+      .subList(0,3).fold(0f) { acc: Float, i: Float ->
       acc + i
     }
 
-    return rayWorld.map { it /len }.subList(0,3).toFloatArray()
+    return rayWorld.map { it / len }.subList(0,3).toFloatArray()
   }
 
   fun removeMarker() {
