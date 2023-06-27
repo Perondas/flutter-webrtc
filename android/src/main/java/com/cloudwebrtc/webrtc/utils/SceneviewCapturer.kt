@@ -38,46 +38,40 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
     private var timer: Timer? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
 
+    private var textId: Int? = null
+
     @RequiresApi(Build.VERSION_CODES.N)
     fun tick() {
 
         val captureTimeNs = TimeUnit.MILLISECONDS.toNanos(SystemClock.elapsedRealtime())
         val yuvConverter = YuvConverter()
 
-        var frameAvailable = false
         var buf: ByteBuffer? = null
+        var w: Int? = null
+        var h: Int? = null
 
         synchronized(holder.lock) {
             if (holder.height == null) return
             if (holder.width == null) return
 
             if (holder.needsNewFrame) return
-
             if (holder.byteBuffer == null) return
+
             buf = holder.byteBuffer!!
             holder.byteBuffer = null
-
-            frameAvailable = true
-
             holder.needsNewFrame = false
+
+            w = holder.width
+            h = holder.height
         }
 
-        if (!frameAvailable) {
-            return
-        }
 
-        val frameWidth = holder.width!!
-        val frameHeight = holder.height!!
+        val frameWidth = w!!
+        val frameHeight = h!!
         val byteBuffer = buf!!
-        holder.byteBuffer = null
 
         surfaceTextureHelper!!.handler.post {
-            val idArr = IntArray(1)
-            GLES20.glGenTextures(1, idArr, 0)
-            GlUtil.checkNoGLES2Error("glGenTextures")
-            val id  = idArr[0]
-
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, id)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textId!!)
 
             GLES20.glTexParameteri(
                 GLES20.GL_TEXTURE_2D,
@@ -99,16 +93,16 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
 
             m.setScale(-1f, -1f)
 
-            val texBuffer = TextureBufferImpl(frameWidth, frameHeight, VideoFrame.TextureBuffer.Type.RGB, id, m, surfaceTextureHelper!!.handler, yuvConverter, null )
+            val texBuffer = TextureBufferImpl(frameWidth, frameHeight, VideoFrame.TextureBuffer.Type.RGB, textId!!, m, surfaceTextureHelper!!.handler, yuvConverter, null )
             val i420Buf = yuvConverter.convert(texBuffer)
 
-            GLES20.glDeleteTextures(1, idArr, 0)
-            GlUtil.checkNoGLES2Error("glDeleteTextures")
+            texBuffer.release()
 
             val videoFrame = VideoFrame(i420Buf, 180, captureTimeNs)
 
             capturerObserver!!.onFrameCaptured(videoFrame)
             videoFrame.release()
+            yuvConverter.release()
 
             synchronized(holder.lock) {
                 holder.needsNewFrame = true
@@ -123,7 +117,14 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
     ) {
         this.capturerObserver = capturerObserver
         this.surfaceTextureHelper = surfaceTextureHelper
+
+        val idArr = IntArray(1)
+        GLES20.glGenTextures(1, idArr, 0)
+        GlUtil.checkNoGLES2Error("glGenTextures")
+        textId  = idArr[0]
     }
+
+
 
     override fun startCapture(width: Int, height: Int, framerate: Int) {
         if (timer != null) {
@@ -149,6 +150,12 @@ class SceneviewCapturer(private val holder: ViewHolder) : VideoCapturer {
     override fun dispose() {
         // Empty on purpose
         timer?.cancel()
+
+        var i = IntArray(1)
+        i[0] = textId!!
+
+        GLES20.glDeleteTextures(1, i, 0)
+        GlUtil.checkNoGLES2Error("glDeleteTextures")
     }
 
     override fun isScreencast(): Boolean {

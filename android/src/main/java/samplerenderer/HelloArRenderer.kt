@@ -150,6 +150,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       backgroundRenderer = BackgroundRenderer(render)
       virtualSceneFramebuffer = Framebuffer(render, /*width=*/ 1, /*height=*/ 1)
 
+
+
       cubemapFilter =
         SpecularCubemapFilter(render, CUBEMAP_RESOLUTION, CUBEMAP_NUMBER_OF_IMPORTANCE_SAMPLES)
       // Load environmental lighting values lookup table
@@ -207,7 +209,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       virtualObjectAlbedoTexture =
         Texture.createFromAsset(
           render,
-          "models/pawn_albedo.png",
+          "models/arrow_tex.png",
           Texture.WrapMode.CLAMP_TO_EDGE,
           Texture.ColorFormat.SRGB
         )
@@ -223,11 +225,11 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       val virtualObjectPbrTexture =
         Texture.createFromAsset(
           render,
-          "models/pawn_roughness_metallic_ao.png",
+          "models/arrow_ao.png",
           Texture.WrapMode.CLAMP_TO_EDGE,
           Texture.ColorFormat.LINEAR
         )
-      virtualObjectMesh = Mesh.createFromAsset(render, "models/pawn.obj")
+      virtualObjectMesh = Mesh.createFromAsset(render, "models/arrow_small.obj")
       virtualObjectShader =
         Shader.createFromAssets(
             render,
@@ -251,6 +253,8 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     displayRotationHelper.onSurfaceChanged(width, height)
     virtualSceneFramebuffer!!.resize(width, height)
   }
+
+  private var tempBuf: Framebuffer? = null
 
   override fun onDrawFrame(render: SampleRender) {
     val session = session ?: return
@@ -373,6 +377,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       render.draw(pointCloudMesh, pointCloudShader)
     }
 
+    /*
     // Visualize planes.
     planeRenderer.drawPlanes(
       render,
@@ -380,6 +385,7 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       camera.displayOrientedPose,
       projectionMatrix
     )
+     */
 
     // -- Draw occluded virtual objects
 
@@ -428,17 +434,21 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
     }
 
     if (needsNew) {
-      var tempBuf = Framebuffer(render, holder.width!!, holder.height!!)
+      if (tempBuf == null) {
+        tempBuf = Framebuffer(render, holder.width!!, holder.height!!)
+      } else {
+        tempBuf!!.resize(holder.width!!, holder.height!!)
+      }
 
       GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
 
-      GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, tempBuf.framebufferId)
+      GLES30.glBindFramebuffer(GLES30.GL_DRAW_FRAMEBUFFER, tempBuf!!.framebufferId)
       GLError.maybeThrowGLException("", "glBindFramebuffer")
 
       GLES30.glBlitFramebuffer(0,0,activity.view.width, activity.view.height, 0,0,  holder.width!!, holder.height!!, GLES30.GL_COLOR_BUFFER_BIT, GLES30.GL_NEAREST)
       GLError.maybeThrowGLException("", "glBlitFramebuffer")
 
-      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, tempBuf.framebufferId);
+      GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, tempBuf!!.framebufferId);
 
       val byteBuffer = JniCommon.nativeAllocateByteBuffer(
         holder.height!! *
@@ -457,8 +467,6 @@ class HelloArRenderer(val activity: SceneViewWrapper, val holder: ViewHolder) :
       GLError.maybeThrowGLException("", "glReadPixels")
 
       handleRequest(frame, camera, byteBuffer)
-
-      tempBuf.close()
 
       GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
 
