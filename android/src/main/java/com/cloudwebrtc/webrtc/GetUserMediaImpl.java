@@ -111,6 +111,7 @@ class GetUserMediaImpl {
     private OutputAudioSamplesInterceptor outputSamplesInterceptor = null;
     JavaAudioDeviceModule audioDeviceModule;
     private final SparseArray<MediaRecorderImpl> mediaRecorders = new SparseArray<>();
+    private AudioDeviceInfo preferredInput = null;
 
     public void screenRequestPermissions(ResultReceiver resultReceiver) {
         final Activity activity = stateProvider.getActivity();
@@ -143,7 +144,7 @@ class GetUserMediaImpl {
 
         private ResultReceiver resultReceiver = null;
         private int requestCode = 0;
-        private int resultCode = 0;
+        private final int resultCode = 0;
 
         private void checkSelfPermissions(boolean requestPermissions) {
             if (resultCode != Activity.RESULT_OK) {
@@ -342,7 +343,7 @@ class GetUserMediaImpl {
             addDefaultAudioConstraints(audioConstraints);
         } else {
             audioConstraints = MediaConstraintsUtils.parseMediaConstraints(constraints.getMap("audio"));
-            deviceId =  getSourceIdConstraint(constraints.getMap("audio"));
+            deviceId = getSourceIdConstraint(constraints.getMap("audio"));
         }
 
         Log.i(TAG, "getUserMedia(audio): " + audioConstraints);
@@ -351,17 +352,12 @@ class GetUserMediaImpl {
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         AudioSource audioSource = pcFactory.createAudioSource(audioConstraints);
 
-        if(deviceId == null) {
-            android.media.AudioManager audioManager = ((android.media.AudioManager) stateProvider.getActivity().getApplicationContext()
-                    .getSystemService(Context.AUDIO_SERVICE));
-            final AudioDeviceInfo[] devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
-            if(devices.length > 0) {
-                deviceId = "0";
-            }
-        }
-
         if(deviceId != null) {
-            setPreferredInputDevice(Integer.parseInt(deviceId));
+            try {
+                setPreferredInputDevice(Integer.parseInt(deviceId));
+            } catch (Exception e) {
+                Log.e(TAG, "setPreferredInputDevice failed", e);
+            }
         }
 
         AudioTrack track =  pcFactory.createAudioTrack(trackId, audioSource);
@@ -376,6 +372,10 @@ class GetUserMediaImpl {
         trackParams.putString("label", track.id());
         trackParams.putString("readyState", track.state().toString());
         trackParams.putBoolean("remote", false);
+
+        if(deviceId == null) {
+            deviceId = "" + getPreferredInputDevice(preferredInput);
+        }
 
         ConstraintsMap settings = new ConstraintsMap();
         settings.putString("deviceId", deviceId);
@@ -798,24 +798,32 @@ class GetUserMediaImpl {
         return trackParams;
     }
 
-    void removeVideoCapturer(String id) {
-        VideoCapturerInfo info = mVideoCapturers.get(id);
-        if (info != null) {
-            try {
-                info.capturer.stopCapture();
-            } catch (InterruptedException e) {
-                Log.e(TAG, "removeVideoCapturer() Failed to stop video capturer");
-            } finally {
-                info.capturer.dispose();
-                mVideoCapturers.remove(id);
-                SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
-                if (helper != null)  {
-                    helper.stopListening();
-                    helper.dispose();
-                    mSurfaceTextureHelpers.remove(id);
+    void removeVideoCapturerSync(String id) {
+        synchronized (mVideoCapturers) {
+            VideoCapturerInfo info = mVideoCapturers.get(id);
+            if (info != null) {
+                try {
+                    info.capturer.stopCapture();
+                } catch (InterruptedException e) {
+                    Log.e(TAG, "removeVideoCapturer() Failed to stop video capturer");
+                } finally {
+                    info.capturer.dispose();
+                    mVideoCapturers.remove(id);
+                    SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
+                    if (helper != null)  {
+                        helper.stopListening();
+                        helper.dispose();
+                        mSurfaceTextureHelpers.remove(id);
+                    }
                 }
             }
         }
+    }
+
+    void removeVideoCapturer(String id) {
+        new Thread(() -> {
+            removeVideoCapturerSync(id);
+        }).start();
     }
 
     @RequiresApi(api = VERSION_CODES.M)
@@ -1001,7 +1009,7 @@ class GetUserMediaImpl {
             List<String> supportedModes = params.getSupportedFlashModes();
 
             result.success(
-                    (supportedModes == null) ? false : supportedModes.contains(Parameters.FLASH_MODE_TORCH));
+                    supportedModes != null && supportedModes.contains(Parameters.FLASH_MODE_TORCH));
             return;
         }
 
@@ -1153,7 +1161,23 @@ class GetUserMediaImpl {
         android.media.AudioManager audioManager = ((android.media.AudioManager) applicationContext.getSystemService(Context.AUDIO_SERVICE));
         final AudioDeviceInfo[] devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
         if (devices.length > i) {
-            audioDeviceModule.setPreferredInputDevice(devices[i]);
+            preferredInput = devices[i];
+            audioDeviceModule.setPreferredInputDevice(preferredInput);
         }
+    }
+
+    @RequiresApi(api = VERSION_CODES.M)
+    int getPreferredInputDevice(AudioDeviceInfo deviceInfo) {
+        if(deviceInfo == null) {
+            return -1;
+        }
+        android.media.AudioManager audioManager = ((android.media.AudioManager) applicationContext.getSystemService(Context.AUDIO_SERVICE));
+        final AudioDeviceInfo[] devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
+        for(int i = 0; i < devices.length; i++) {
+            if(devices[i].getId() == deviceInfo.getId()) {
+                return i;
+            }
+        }
+        return -1;
     }
 }

@@ -2,6 +2,7 @@ package com.cloudwebrtc.webrtc.audio;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
@@ -49,6 +50,8 @@ public class AudioSwitchManager {
     @Nullable
     private AudioSwitch audioSwitch;
 
+    private boolean _speakerphoneOn = false;
+
     public AudioSwitchManager(@NonNull Context context) {
         this.context = context;
         this.audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
@@ -82,6 +85,7 @@ public class AudioSwitchManager {
             handler.postAtFrontOfQueue(() -> {
                 if (!isActive) {
                     Objects.requireNonNull(audioSwitch).activate();
+                    audioManager.setSpeakerphoneOn(_speakerphoneOn);
                     isActive = true;
                 }
             });
@@ -132,8 +136,25 @@ public class AudioSwitchManager {
 
     public void enableSpeakerphone(boolean enable) {
         audioManager.setSpeakerphoneOn(enable);
+        _speakerphoneOn = enable;
     }
-    
+
+    public void enableSpeakerButPreferBluetooth() {
+        AudioDeviceInfo bluetoothDevice = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            for (AudioDeviceInfo device : devices) {
+                if (device.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+                    bluetoothDevice = device;
+                    break;
+                }
+            }
+        }
+        if (bluetoothDevice == null) {
+            audioManager.setSpeakerphoneOn(_speakerphoneOn);
+        }
+    }
+
     public void selectAudioOutput(@Nullable AudioDeviceKind kind) {
         if (kind != null) {
             selectAudioOutput(kind.audioDeviceClass);

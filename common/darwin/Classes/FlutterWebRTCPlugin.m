@@ -5,6 +5,7 @@
 #import "FlutterRTCMediaStream.h"
 #import "FlutterRTCPeerConnection.h"
 #import "FlutterRTCVideoRenderer.h"
+#import "FlutterRTCFrameCryptor.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <WebRTC/RTCFieldTrials.h>
@@ -151,6 +152,8 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
   self.localStreams = [NSMutableDictionary new];
   self.localTracks = [NSMutableDictionary new];
   self.renders = [NSMutableDictionary new];
+  self.frameCryptors = [NSMutableDictionary new];
+  self.keyProviders = [NSMutableDictionary new];
   self.videoCapturerStopHandlers = [NSMutableDictionary new];
 #if TARGET_OS_IPHONE
   AVAudioSession* session = [AVAudioSession sharedInstance];
@@ -789,6 +792,16 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
     [AudioUtils setSpeakerphoneOn:_speakerOn];
     result(nil);
   }
+  else if ([@"enableSpeakerphoneButPreferBluetooth" isEqualToString:call.method]) {
+    [AudioUtils setSpeakerphoneOnButPreferBluetooth];
+    result(nil);
+  }
+  else if([@"setAppleAudioConfiguration" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSDictionary* configuration = argsMap[@"configuration"];
+    [AudioUtils setAppleAudioConfiguration:configuration];
+    result(nil);
+  }
 #endif
   else if ([@"getLocalDescription" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
@@ -1205,7 +1218,7 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
     NSDictionary* argsMap = call.arguments;
     [self peerConnectionGetRtpSenderCapabilities:argsMap result:result];
   } else {
-    result(FlutterMethodNotImplemented);
+    [self handleFrameCryptorMethodCall:call result:result];
   }
 }
 
@@ -1444,6 +1457,11 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
     }
   }
 
+  if (json[@"maxIPv6Networks"] != nil && [json[@"maxIPv6Networks"] isKindOfClass:[NSNumber class]]) {
+    NSNumber* maxIPv6Networks = json[@"maxIPv6Networks"];
+     config.maxIPv6Networks = [maxIPv6Networks intValue];
+  }
+    
   // === below is private api in webrtc ===
   if (json[@"tcpCandidatePolicy"] != nil &&
       [json[@"tcpCandidatePolicy"] isKindOfClass:[NSString class]]) {
@@ -1754,7 +1772,8 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
 
 - (RTCRtpTransceiver*)getRtpTransceiverById:(RTCPeerConnection*)peerConnection Id:(NSString*)Id {
   for (RTCRtpTransceiver* transceiver in peerConnection.transceivers) {
-    if ([transceiver.mid isEqualToString:Id]) {
+      NSString *mid = transceiver.mid ? transceiver.mid : @"";
+    if ([mid isEqualToString:Id]) {
       return transceiver;
     }
   }
