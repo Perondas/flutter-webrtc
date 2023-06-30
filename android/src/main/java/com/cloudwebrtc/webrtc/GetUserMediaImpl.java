@@ -48,6 +48,7 @@ import com.cloudwebrtc.webrtc.utils.EglUtils;
 import com.cloudwebrtc.webrtc.utils.MediaConstraintsUtils;
 import com.cloudwebrtc.webrtc.utils.ObjectType;
 import com.cloudwebrtc.webrtc.utils.PermissionUtils;
+import com.cloudwebrtc.webrtc.utils.SceneviewCapturer;
 
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
@@ -395,7 +396,7 @@ class GetUserMediaImpl {
      * requested.
      */
     void getUserMedia(
-            final ConstraintsMap constraints, final Result result, final MediaStream mediaStream) {
+            final ConstraintsMap constraints, final Result result, final MediaStream mediaStream, ViewHolder holder) {
 
         final ArrayList<String> requestPermissions = new ArrayList<>();
 
@@ -442,7 +443,7 @@ class GetUserMediaImpl {
 
         /// Only systems pre-M, no additional permission request is needed.
         if (VERSION.SDK_INT < VERSION_CODES.M) {
-            getUserMedia(constraints, result, mediaStream, requestPermissions);
+            getUserMedia(constraints, result, mediaStream, requestPermissions, holder);
             return;
         }
 
@@ -453,7 +454,7 @@ class GetUserMediaImpl {
                     public void invoke(Object... args) {
                         List<String> grantedPermissions = (List<String>) args[0];
 
-                        getUserMedia(constraints, result, mediaStream, grantedPermissions);
+                        getUserMedia(constraints, result, mediaStream, grantedPermissions, holder);
                     }
                 },
                 /* errorCallback */ new Callback() {
@@ -587,14 +588,15 @@ class GetUserMediaImpl {
             ConstraintsMap constraints,
             Result result,
             MediaStream mediaStream,
-            List<String> grantedPermissions) {
+            List<String> grantedPermissions,
+            ViewHolder holder) {
         ConstraintsMap[] trackParams = new ConstraintsMap[2];
 
         // If we fail to create either, destroy the other one and fail.
         if ((grantedPermissions.contains(PERMISSION_AUDIO)
                 && (trackParams[0] = getUserAudio(constraints, mediaStream)) == null)
                 || (grantedPermissions.contains(PERMISSION_VIDEO)
-                && (trackParams[1] = getUserVideo(constraints, mediaStream)) == null)) {
+                && (trackParams[1] = getUserVideo(constraints, mediaStream, holder)) == null)) {
             for (MediaStreamTrack track : mediaStream.audioTracks) {
                 if (track != null) {
                     track.dispose();
@@ -677,7 +679,7 @@ class GetUserMediaImpl {
         return null;
     }
 
-    private ConstraintsMap getUserVideo(ConstraintsMap constraints, MediaStream mediaStream) {
+    private ConstraintsMap getUserVideo(ConstraintsMap constraints, MediaStream mediaStream, ViewHolder holder) {
         ConstraintsMap videoConstraintsMap = null;
         ConstraintsMap videoConstraintsMandatory = null;
         if (constraints.getType("video") == ObjectType.Map) {
@@ -708,19 +710,28 @@ class GetUserMediaImpl {
 
         String facingMode = getFacingMode(videoConstraintsMap);
         isFacing = facingMode == null || !facingMode.equals("environment");
+        boolean isAr = facingMode != null && facingMode.equals("ar");
+
+        VideoCapturer videoCapturer;
         String deviceId = getSourceIdConstraint(videoConstraintsMap);
 
-        Map<String, VideoCapturer> result = createVideoCapturer(cameraEnumerator, isFacing, deviceId);
+        if (isAr) {
+            if (VERSION.SDK_INT >= VERSION_CODES.N) {
+                videoCapturer = new SceneviewCapturer(holder);
+            }
+            else {
+                return null;
+            }
+        } else {
+            
+            Map<String, VideoCapturer> result = createVideoCapturer(cameraEnumerator, isFacing, deviceId);
 
-        if (result == null) {
-            return null;
+            if(deviceId == null) {
+                deviceId = result.keySet().iterator().next();
+            }
+
+            videoCapturer = result.get(deviceId);
         }
-
-        if(deviceId == null) {
-            deviceId = result.keySet().iterator().next();
-        }
-
-        VideoCapturer videoCapturer = result.get(deviceId);
 
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         VideoSource videoSource = pcFactory.createVideoSource(false);

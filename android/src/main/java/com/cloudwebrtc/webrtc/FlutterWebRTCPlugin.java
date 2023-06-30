@@ -32,6 +32,8 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
 
     static public final String TAG = "FlutterWebRTCPlugin";
     private static Application application;
+    private FlutterPlugin.FlutterPluginBinding flutterPluginBinding = null;
+    private ViewHolder holder = new ViewHolder();
 
     private MethodChannel methodChannel;
     private MethodCallHandlerImpl methodCallHandler;
@@ -67,11 +69,13 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         startListening(binding.getApplicationContext(), binding.getBinaryMessenger(),
                 binding.getTextureRegistry());
+        this.flutterPluginBinding = binding;
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         stopListening();
+        this.flutterPluginBinding = null;
     }
 
     @Override
@@ -80,6 +84,7 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
         this.observer = new LifeCycleObserver();
         this.lifecycle = ((HiddenLifecycleReference) binding.getLifecycle()).getLifecycle();
         this.lifecycle.addObserver(this.observer);
+        this.flutterPluginBinding.getPlatformViewRegistry().registerViewFactory("SceneView", new SceneViewFactory(binding.getActivity(), this.flutterPluginBinding.getBinaryMessenger(), this.holder));
     }
 
     @Override
@@ -107,7 +112,7 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
     private void startListening(final Context context, BinaryMessenger messenger,
                                 TextureRegistry textureRegistry) {
         AudioSwitchManager.instance = new AudioSwitchManager(context);
-        methodCallHandler = new MethodCallHandlerImpl(context, messenger, textureRegistry);
+        methodCallHandler = new MethodCallHandlerImpl(context, messenger, textureRegistry, holder);
         methodChannel = new MethodChannel(messenger, "FlutterWebRTC.Method");
         methodChannel.setMethodCallHandler(methodCallHandler);
         eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");

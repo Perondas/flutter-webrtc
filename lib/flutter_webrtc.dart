@@ -14,3 +14,6 @@ export 'src/native/rtc_video_renderer_impl.dart'
 export 'src/native/rtc_video_view_impl.dart'
     if (dart.library.html) 'src/web/rtc_video_view_impl.dart';
 export 'src/native/utils.dart' if (dart.library.html) 'src/web/utils.dart';
+
+export 'src/native/scene_view.dart';
+export 'src/native/sceneview_controller.dart';

@@ -92,6 +92,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
   private final Map<String, PeerConnectionObserver> mPeerConnectionObservers = new HashMap<>();
   private final BinaryMessenger messenger;
   private final Context context;
+  private final ViewHolder holder;
   private final TextureRegistry textures;
   private PeerConnectionFactory mFactory;
   private final Map<String, MediaStream> localStreams = new HashMap<>();
@@ -110,10 +111,11 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
 
   private Activity activity;
 
-  MethodCallHandlerImpl(Context context, BinaryMessenger messenger, TextureRegistry textureRegistry) {
+  MethodCallHandlerImpl(Context context, BinaryMessenger messenger, TextureRegistry textureRegistry, ViewHolder holder) {
     this.context = context;
     this.textures = textureRegistry;
     this.messenger = messenger;
+    this.holder = holder;
   }
 
   static private void resultError(String method, String error, Result result) {
@@ -1210,7 +1212,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       return;
     }
 
-    getUserMediaImpl.getUserMedia(constraints, result, mediaStream);
+    getUserMediaImpl.getUserMedia(constraints, result, mediaStream, this.holder);
   }
 
   public void getDisplayMedia(ConstraintsMap constraints, Result result) {

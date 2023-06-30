@@ -52,4 +52,11 @@ dependencies {
     implementation 'com.twilio:audioswitch:1.1.7'
     implementation 'androidx.annotation:annotation:1.1.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    implementation 'com.google.ar:core:1.37.0'
+
+    implementation 'de.javagl:obj:0.2.1'
+
+    implementation "androidx.lifecycle:lifecycle-common-java8:2.4.0"
+    implementation "androidx.core:core-ktx:1.9.0"
 }
